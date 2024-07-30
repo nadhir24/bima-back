@@ -1,22 +1,22 @@
 import {
-  Body,
   Controller,
-  Delete,
-  Get,
+  Post,
+  Body,
+  UseInterceptors,
+  UploadedFile,
   HttpException,
   HttpStatus,
+  Get,
   Param,
-  Post,
   Put,
-  UploadedFile,
-  UseInterceptors,
+  Delete,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { CatalogService } from './catalog.service';
-import { multerConfig } from 'multer.config';
-import { PrismaService } from 'prisma/prisma.service';
+import { multerConfig } from 'multer.config'; // Ensure correct import path
 import { Catalog, Prisma } from '@prisma/client';
+
 @Controller('catalog')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
@@ -24,33 +24,43 @@ export class CatalogController {
   @Post('/create')
   @UseInterceptors(FileInterceptor('image', multerConfig))
   async createCatalog(
-    @Body() createCatalogDto: CreateCatalogDto,
+    @Body() formData: any, // Use `any` type for form-data
     @UploadedFile() image: Express.Multer.File,
-  ): Promise<any> {
+  ) {
     try {
-      // Logging data for debugging
-      console.log('Received CreateCatalogDto:', createCatalogDto);
-      console.log('Uploaded file:', image);
-
-      // Determine the final image path or use a default
       const finalImageUrl = image ? image.path : 'default.jpg';
 
-      // Create the catalog entry
-      const createdCatalog = await this.catalogService.createCatalog({
-        ...createCatalogDto,
+      // Parse form-data fields
+      const createCatalogDto: CreateCatalogDto = {
+        name: formData.name,
+        category: formData.category,
+        qty: parseInt(formData.qty, 10), // Parse qty as integer
+        price: formData.price.replace(/[^\d.-]/g, ''), // Remove non-numeric characters from price
+        isEnabled: formData.isEnabled === 'true', // Convert to boolean
         image: finalImageUrl,
-      });
+      };
 
-      // Return the created catalog entry
-      return createdCatalog;
+      // Create catalog entry
+      const createdCatalog = await this.catalogService.createCatalog(createCatalogDto);
+
+      // Format the price back to Rp format for the response
+      const formattedPrice = `Rp${parseFloat(createCatalogDto.price).toLocaleString('id-ID', { minimumFractionDigits: 3 }).replace('.', ',')}`;
+
+      // Return the catalog entry with formatted price
+      return {
+        ...createdCatalog,
+        price: formattedPrice,
+      };
     } catch (error) {
-      console.error('Error creating catalog entry:', error);
       throw new HttpException(
-        'Failed to create catalog entry',
+        error.message || 'Failed to create catalog entry',
         HttpStatus.BAD_REQUEST,
       );
     }
   }
+
+
+
 
   @Get()
   async findAll(): Promise<Catalog[]> {
@@ -73,5 +83,28 @@ export class CatalogController {
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<Catalog> {
     return this.catalogService.remove(+id);
+  }
+
+  async purchase(
+    userId: number,
+    catalogId: number,
+    quantity: number,
+  ): Promise<void> {
+    try {
+      // Lakukan operasi untuk membuat pembelian, dan setelah berhasil,
+      // panggil updateQuantity untuk mengurangi qty dari katalog yang sesuai.
+
+      // Contoh penggunaan:
+      // Lakukan validasi dan proses pembelian sesuai kebutuhan aplikasi Anda.
+
+      await this.catalogService.updateQuantity(catalogId, quantity);
+
+      // Setelah berhasil, lakukan proses pembelian ke entitas yang sesuai (mungkin Payment, dll).
+    } catch (error) {
+      throw new HttpException(
+        'Failed to process purchase',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 }

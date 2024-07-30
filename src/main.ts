@@ -1,22 +1,28 @@
+// src/main.ts
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import express, { urlencoded, json } from 'express';
+import { urlencoded, json } from 'express';
 import { join } from 'path';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import * as dotenv from 'dotenv';
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
   // Support application/x-www-form-urlencoded
   app.use(urlencoded({ extended: true }));
   app.use(json());
+  dotenv.config(); // Load environment variables from .env file
 
+  // Menyajikan file statis dari direktori uploads/catalog_images
+  app.useStaticAssets(join(__dirname, '..', '..', 'uploads/catalog_images'), {
+    prefix: '/uploads/catalog_images',
+  });
+
+  app.enableCors();
   app.useGlobalPipes(new ValidationPipe({ transform: true }));
-  app.use(
-    '/uploads/catalog_images',
-    express.static(join(__dirname, '..', 'uploads/catalog_images')),
-  );
 
-  await app.listen(3000);
+  await app.listen(5000);
 }
 bootstrap();

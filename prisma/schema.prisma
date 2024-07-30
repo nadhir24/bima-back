@@ -1,6 +1,8 @@
+// prisma/schema.prisma
+
 datasource db {
-  provider = "postgresql"
-  url      = env("DATABASE_URL")
+  provider = "postgresql" // Change to your database provider if needed
+  url      = env("DATABASE_URL") // Environment variable for the database connection URL
 }
 
 generator client {
@@ -8,25 +10,19 @@ generator client {
 }
 
 model User {
-  id           Int       @id @default(autoincrement())
-  phoneNumber  String    @unique @map("phone_number")
-  email        String?   @unique
-  password     String?
-  createdAt    DateTime  @default(now()) @map("created_at")
-  otp          OTP[]
-
+  id              Int            @id @default(autoincrement())
+  fullName        String
+  phoneNumber     String
+  email           String         @unique
+  password        String
+  createdAt       DateTime       @default(now())
+  carts           Cart[]
+  payments        Payment[]
+  userProfile     UserProfile?
+  userPassword    UserPassword?
+  userRoles       UserRole[]
+  photoProfile    String?      
   @@map("users")
-}
-
-model OTP {
-  id         Int      @id @default(autoincrement())
-  userId     Int
-  code       String
-  createdAt  DateTime @default(now()) @map("created_at")
-  expiresAt  DateTime @map("expires_at")
-  user       User     @relation(fields: [userId], references: [id])
-
-  @@map("otp")
 }
 
 model Catalog {
@@ -36,15 +32,90 @@ model Catalog {
   qty       Int
   isEnabled Boolean
   image     String
+  price     String  
+  carts     Cart[]
+
+  @@map("catalog")
 }
 
-
-
-model Blog {
+model Cart {
   id        Int      @id @default(autoincrement())
-  title     String
-  content   String
-  createdAt DateTime @default(now()) @map("created_at")
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  catalogId Int
+  catalog   Catalog  @relation(fields: [catalogId], references: [id])
+  quantity  Int
+  createdAt DateTime @default(now())
+  paymentId Int?
+  payment   Payment? @relation(fields: [paymentId], references: [id])
 
-  @@map("blog")
+  @@map("cart")
+}
+
+model Payment {
+  id        Int      @id @default(autoincrement())
+  userId    Int
+  user      User     @relation(fields: [userId], references: [id])
+  amount    Float
+  status    String
+  createdAt DateTime @default(now())
+  carts     Cart[]
+
+  @@map("payment")
+}
+
+model UserProfile {
+  id              Int      @id @default(autoincrement()) @map("uspro_id")
+  birthDate       String?  @map("uspro_birt_date")
+  gender          String?  @map("uspro_gender")
+  addressId       Int?     @map("uspro_addr_id")
+  userId          Int?     @map("uspro_user_id") @unique
+  address         Address? @relation(fields: [addressId], references: [id])
+  user            User?    @relation(fields: [userId], references: [id])
+
+  @@index([id], name: "pkey_user_profiles")
+  @@map("user_profiles")
+}
+
+model Address {
+  id          Int       @id @default(autoincrement())
+  street      String
+  city        String
+  state       String
+  postalCode  String
+  country     String
+  userProfiles UserProfile[]
+
+  @@map("address")
+}
+
+model Role {
+  id       Int        @id @default(autoincrement()) @map("role_id")
+  name     String?    @map("role_name")
+
+  userRoles UserRole[]
+
+  @@index([id], name: "pkey_users_user_role_id")
+  @@map("roles")
+}
+
+model UserRole {
+  userId  Int
+  roleId  Int
+
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
+
+  @@id([userId, roleId])
+  @@map("user_roles")
+}
+
+model UserPassword {
+  id             Int    @id @default(autoincrement())
+  userId         Int    @unique
+  passwordHash   String?
+  passwordSalt   String?
+  user           User   @relation(fields: [userId], references: [id])
+
+  @@map("user_password")
 }

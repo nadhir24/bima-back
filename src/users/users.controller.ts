@@ -1,93 +1,91 @@
 import {
   Controller,
   Get,
-  HttpException,
-  HttpStatus,
-  Param,
   Post,
+  Put,
+  Req,
   Body,
-  Res,
+  Param,
+  HttpStatus,
+  UseInterceptors,
+  UploadedFile,
+  ParseFilePipe,
+  FileTypeValidator,
+  MaxFileSizeValidator,
+  HttpException,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
-import { Response } from 'express';
-import { ok } from 'assert';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { Request } from 'express';
+import { existsSync, unlink } from 'fs';
+import { UpdateUserDto } from './dto/UpdateUser.dto';
+
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
 
-  @Post('register/sendVerificationCode')
-  async sendVerificationCode(
-    @Body('phoneNumber') phoneNumber: string,
-    @Res() res: Response,
+  @Put('update/:id')
+  @UseInterceptors(
+    FileInterceptor('photoProfile', {
+      storage: diskStorage({
+        destination: './uploads/image/users',
+        filename(req, file, callback) {
+          const uniqueSuffix = Date.now() + Math.round(Math.random() * 1e9);
+          callback(
+            null,
+            uniqueSuffix + '.' + file.originalname.split('.').pop(),
+          );
+        },
+      }),
+    }),
+  )
+  async updateUser(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() updateUserDto: UpdateUserDto,
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 2000000 }),
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file: Express.Multer.File,
   ) {
-    try {
-      const otp = await this.usersService.sendVerificationCode(phoneNumber);
-      res.status(HttpStatus.OK).json({ phoneNumber, otp });
-    } catch (error) {
-      console.error('Error in controller:', error);
-      res
-        .status(error.status || HttpStatus.INTERNAL_SERVER_ERROR)
-        .json({ error: error.message });
-    }
-  }
+    const user = await this.usersService.getUserById(+id);
 
-  @Get('getAllUsers')
-  async getAllUsers(): Promise<any> {
-    try {
-      const users = await this.usersService.getAll();
-      return { users };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    if (!user) {
+      throw new HttpException(`User not found`, HttpStatus.NOT_FOUND);
     }
-  }
 
-  @Post('register/verifyPhoneNumber')
-  async verifyPhoneNumber(
-    @Body('userId') userId: number,
-    @Body('otp') otp: string,
-  ): Promise<any> {
-    try {
-      const isVerified = await this.usersService.verifyPhoneNumber(userId, otp);
-      if (isVerified) {
-        return { message: 'Phone number verified successfully' };
-      } else {
-        throw new HttpException('Invalid OTP', HttpStatus.BAD_REQUEST);
+    const oldImage = user.photoProfile;
+    let finalImageUrl: string;
+
+    if (file) {
+      if (
+        existsSync('uploads/users/' + oldImage) &&
+        oldImage !== 'default.jpg'
+      ) {
+        unlink('uploads/users/' + oldImage, (err) => {
+          if (err) throw err;
+        });
       }
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+      finalImageUrl = file.filename;
+    } else {
+      finalImageUrl = oldImage;
     }
-  }
 
-  @Post('register/details')
-  async register(
-    @Body('phoneNumber') phoneNumber: string,
-    @Body('email') email: string,
-    @Body('password') password: string,
-    @Body('retypePassword') retypePassword: string,
-  ): Promise<any> {
-    try {
-      await this.usersService.register(
-        phoneNumber,
-        email,
-        password,
-        retypePassword,
-      );
-      return { message: 'Registration successful', HttpStatus, ok };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
-  }
+    await this.usersService.updateUser(+id, {
+      ...updateUserDto,
+      photoProfile: finalImageUrl,
+    });
 
-  @Get('findUsers/:id')
-  async findUsers(@Param('id') id: string): Promise<any> {
-    try {
-      const user = await this.usersService.findUsers(Number(id));
-      if (!user) {
-        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-      }
-      return { user };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+    return {
+      statusCode: HttpStatus.OK,
+      message: 'User updated successfully',
+    };
   }
 }
