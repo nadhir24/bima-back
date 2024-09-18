@@ -29,6 +29,7 @@ model Catalog {
   id        Int      @id @default(autoincrement())
   name      String
   category  String
+  size      String   
   qty       Int
   isEnabled Boolean
   image     String

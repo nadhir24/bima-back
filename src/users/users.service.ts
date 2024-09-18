@@ -14,34 +14,34 @@ export class UsersService {
     });
   }
 
-  async signUp(createUserDto: CreateUserDto) {
-    const salt = await bcrypt.genSalt(10);
-    const passHash = await bcrypt.hash(createUserDto.password, salt);
+  // async signUp(createUserDto: CreateUserDto) {
+  //   const salt = await bcrypt.genSalt(10);
+  //   const passHash = await bcrypt.hash(createUserDto.password, salt);
 
-    const defaultRoleId = 1; // ID peran default
+  //   const defaultRoleId = 1; // ID peran default
 
-    return this.prisma.user.create({
-      data: {
-        fullName: createUserDto.fullName,
-        email: createUserDto.email,
-        phoneNumber: createUserDto.phoneNumber,
-        userPassword: {
-          create: {
-            passwordHash: passHash,
-          },
-        },
-        userRoles: {
-          create: {
-            roleId: defaultRoleId,
-          },
-        },
-      },
-    });
-  }
+  //   return this.prisma.user.create({
+  //     data: {
+  //       fullName: createUserDto.fullName,
+  //       email: createUserDto.email,
+  //       phoneNumber: createUserDto.phoneNumber,
+  //       userPassword: {
+  //         create: {
+  //           passwordHash: passHash,
+  //         },
+  //       },
+  //       userRoles: {
+  //         create: {
+  //           roleId: defaultRoleId,
+  //         },
+  //       },
+  //     },
+  //   });
+  // }
 
   async updateUser(id: number, updateUserDto: UpdateUserDto) {
     const user = await this.prisma.user.findUnique({ where: { id } });
-    const { fullName, phoneNumber, email, uspro_gender, uspro_birth_date, roleID, photoProfile } = updateUserDto;
+    const { fullName, phoneNumber, email, uspro_gender, uspro_birt_date, roleID, photoProfile } = updateUserDto;
 
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
@@ -57,7 +57,7 @@ export class UsersService {
           userProfile: {
             update: {
               gender: uspro_gender,
-              birthDate: uspro_birth_date,
+              // birthDate: uspro_birt_date,
             },
           },
           userRoles: {

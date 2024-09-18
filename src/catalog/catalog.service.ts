@@ -9,7 +9,11 @@ export class CatalogService {
 
   async findAll(): Promise<Catalog[]> {
     try {
-      return await this.prisma.catalog.findMany();
+      const catalogs = await this.prisma.catalog.findMany();
+      return catalogs.map((catalog) => ({
+        ...catalog,
+        // Optional: include logic for formatting image URLs
+      }));
     } catch (error) {
       throw new HttpException(
         'Failed to retrieve catalog entries',
@@ -62,9 +66,6 @@ export class CatalogService {
       }
       return catalog;
     } catch (error) {
-      if (error.status && error.status === HttpStatus.NOT_FOUND) {
-        throw error;
-      }
       throw new HttpException(
         'Failed to retrieve catalog entry',
         HttpStatus.BAD_REQUEST,
@@ -73,17 +74,17 @@ export class CatalogService {
   }
 
   async createCatalog(createCatalogDto: CreateCatalogDto): Promise<Catalog> {
-    const { name, category, qty, price, isEnabled, image } = createCatalogDto;
-    const formattedPrice = `Rp${parseFloat(createCatalogDto.price).toLocaleString('id-ID', { minimumFractionDigits: 3 }).replace('.', ',')}`;
+    const { name, category, qty, price, isEnabled, image, size } = createCatalogDto;
+    const formattedPrice = `Rp${parseFloat(price).toLocaleString('id-ID', { minimumFractionDigits: 3 }).replace('.', ',')}`;
 
     try {
-      // Ensure price is stored as a string in the database
       const newCatalog = await this.prisma.catalog.create({
         data: {
           name,
           category,
           qty,
-          price: formattedPrice, // Ensure price is stored as a string in the database
+          price: formattedPrice,
+          size,
           isEnabled,
           image,
         },
@@ -97,6 +98,7 @@ export class CatalogService {
       );
     }
   }
+
   async update(id: number, data: Prisma.CatalogUpdateInput): Promise<Catalog> {
     try {
       return await this.prisma.catalog.update({

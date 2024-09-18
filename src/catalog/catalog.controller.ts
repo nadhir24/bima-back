@@ -2,51 +2,71 @@ import {
   Controller,
   Post,
   Body,
-  UseInterceptors,
   UploadedFile,
   HttpException,
   HttpStatus,
+  UseInterceptors,
   Get,
   Param,
-  Put,
+  Res,
   Delete,
+  Put,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { CreateCatalogDto } from './dto/create-catalog.dto';
+import { diskStorage } from 'multer';
+import { join, extname } from 'path';
+import { Response } from 'express';
 import { CatalogService } from './catalog.service';
-import { multerConfig } from 'multer.config'; // Ensure correct import path
+import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { Catalog, Prisma } from '@prisma/client';
 
 @Controller('catalog')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
-  @Post('/create')
-  @UseInterceptors(FileInterceptor('image', multerConfig))
+  @Get('findall')
+  async findAll(): Promise<Catalog[]> {
+    return this.catalogService.findAll();
+  }
+
+  @Post('create')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: join(__dirname, '..', '..', '..', 'uploads', 'catalog_images'),
+        filename: (req, file, cb) => {
+          const filename: string = file.originalname.split('.')[0];
+          const extension: string = extname(file.originalname);
+          cb(null, `${filename}-${Date.now()}${extension}`);
+        },
+      }),
+    }),
+  )
   async createCatalog(
-    @Body() formData: any, // Use `any` type for form-data
+    @Body() formData: any,
     @UploadedFile() image: Express.Multer.File,
   ) {
     try {
-      const finalImageUrl = image ? image.path : 'default.jpg';
+      const finalImageUrl = image ? `/uploads/catalog_images/${image.filename}` : null;
 
-      // Parse form-data fields
       const createCatalogDto: CreateCatalogDto = {
         name: formData.name,
         category: formData.category,
-        qty: parseInt(formData.qty, 10), // Parse qty as integer
-        price: formData.price.replace(/[^\d.-]/g, ''), // Remove non-numeric characters from price
-        isEnabled: formData.isEnabled === 'true', // Convert to boolean
-        image: finalImageUrl,
+        size: formData.size,
+        qty: parseInt(formData.qty, 10),
+        price: formData.price.replace(/[^\d.-]/g, ''), 
+        isEnabled: formData.isEnabled === 'true',
+        image: finalImageUrl, 
       };
 
-      // Create catalog entry
       const createdCatalog = await this.catalogService.createCatalog(createCatalogDto);
 
-      // Format the price back to Rp format for the response
-      const formattedPrice = `Rp${parseFloat(createCatalogDto.price).toLocaleString('id-ID', { minimumFractionDigits: 3 }).replace('.', ',')}`;
+      const formattedPrice = `Rp${parseFloat(createCatalogDto.price)
+        .toLocaleString('id-ID', {
+          minimumFractionDigits: 3,
+        })
+        .replace('.', ',')}`;
 
-      // Return the catalog entry with formatted price
       return {
         ...createdCatalog,
         price: formattedPrice,
@@ -59,12 +79,14 @@ export class CatalogController {
     }
   }
 
-
-
-
-  @Get()
-  async findAll(): Promise<Catalog[]> {
-    return this.catalogService.findAll();
+  @Get(':imgpath')
+  seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
+    const filePath = join(__dirname, '..', '..', '..', 'uploads', 'catalog_images', image); 
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        res.status(404).send('File not found.');
+      }
+    });
   }
 
   @Get(':id')
@@ -85,21 +107,14 @@ export class CatalogController {
     return this.catalogService.remove(+id);
   }
 
+  @Post('purchase')
   async purchase(
-    userId: number,
-    catalogId: number,
-    quantity: number,
+    @Body('userId') userId: number,
+    @Body('catalogId') catalogId: number,
+    @Body('quantity') quantity: number,
   ): Promise<void> {
     try {
-      // Lakukan operasi untuk membuat pembelian, dan setelah berhasil,
-      // panggil updateQuantity untuk mengurangi qty dari katalog yang sesuai.
-
-      // Contoh penggunaan:
-      // Lakukan validasi dan proses pembelian sesuai kebutuhan aplikasi Anda.
-
       await this.catalogService.updateQuantity(catalogId, quantity);
-
-      // Setelah berhasil, lakukan proses pembelian ke entitas yang sesuai (mungkin Payment, dll).
     } catch (error) {
       throw new HttpException(
         'Failed to process purchase',

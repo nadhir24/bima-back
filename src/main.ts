@@ -1,28 +1,28 @@
-// src/main.ts
+import 'dotenv/config';
 import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
-import { urlencoded, json } from 'express';
-import { join } from 'path';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import * as dotenv from 'dotenv';
+import path, { join } from 'path';
+import * as express from 'express';
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
 
-  // Support application/x-www-form-urlencoded
-  app.use(urlencoded({ extended: true }));
-  app.use(json());
-  dotenv.config(); // Load environment variables from .env file
+  const port = process.env.PORT || 5000;
 
-  // Menyajikan file statis dari direktori uploads/catalog_images
-  app.useStaticAssets(join(__dirname, '..', '..', 'uploads/catalog_images'), {
-    prefix: '/uploads/catalog_images',
+  app.useGlobalPipes(new ValidationPipe());
+
+  // Mengaktifkan akses ke folder statis untuk gambar
+
+  // Konfigurasi CORS
+  app.enableCors({
+    origin: true,
   });
 
-  app.enableCors();
-  app.useGlobalPipes(new ValidationPipe({ transform: true }));
-
-  await app.listen(5000);
+  await app.listen(port, () => {
+    console.log(`App running on port ${port}`);
+  });
 }
+
 bootstrap();
