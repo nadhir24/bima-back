@@ -54,10 +54,12 @@ export class CatalogService {
   }
 
   async findOne(id: number): Promise<Catalog> {
+    console.log('Fetching catalog with ID:', id); // Debugging log
     try {
       const catalog = await this.prisma.catalog.findUnique({
         where: { id },
       });
+      console.log('Catalog result:', catalog); // Debugging log
       if (!catalog) {
         throw new HttpException(
           'Catalog entry not found',
@@ -66,6 +68,7 @@ export class CatalogService {
       }
       return catalog;
     } catch (error) {
+      console.error('Error fetching catalog:', error);
       throw new HttpException(
         'Failed to retrieve catalog entry',
         HttpStatus.BAD_REQUEST,
@@ -74,7 +77,8 @@ export class CatalogService {
   }
 
   async createCatalog(createCatalogDto: CreateCatalogDto): Promise<Catalog> {
-    const { name, category, qty, price, isEnabled, image, size } = createCatalogDto;
+    const { name, category, qty, price, isEnabled, image, size } =
+      createCatalogDto;
     const formattedPrice = `Rp${parseFloat(price).toLocaleString('id-ID', { minimumFractionDigits: 3 }).replace('.', ',')}`;
 
     try {
@@ -121,6 +125,33 @@ export class CatalogService {
     } catch (error) {
       throw new HttpException(
         'Failed to remove catalog entry',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+  async findByNameAndCategory(
+    name: string,
+    category: string,
+  ): Promise<Catalog> {
+    try {
+      const catalog = await this.prisma.catalog.findFirst({
+        where: {
+          name,
+          category,
+        },
+      });
+
+      if (!catalog) {
+        throw new HttpException(
+          'Catalog entry not found',
+          HttpStatus.NOT_FOUND,
+        );
+      }
+
+      return catalog;
+    } catch (error) {
+      throw new HttpException(
+        'Failed to retrieve catalog entry',
         HttpStatus.BAD_REQUEST,
       );
     }

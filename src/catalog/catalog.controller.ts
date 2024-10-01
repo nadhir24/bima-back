@@ -11,6 +11,7 @@ import {
   Res,
   Delete,
   Put,
+  Query,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -33,7 +34,14 @@ export class CatalogController {
   @UseInterceptors(
     FileInterceptor('image', {
       storage: diskStorage({
-        destination: join(__dirname, '..', '..', '..', 'uploads', 'catalog_images'),
+        destination: join(
+          __dirname,
+          '..',
+          '..',
+          '..',
+          'uploads',
+          'catalog_images',
+        ),
         filename: (req, file, cb) => {
           const filename: string = file.originalname.split('.')[0];
           const extension: string = extname(file.originalname);
@@ -47,19 +55,22 @@ export class CatalogController {
     @UploadedFile() image: Express.Multer.File,
   ) {
     try {
-      const finalImageUrl = image ? `/uploads/catalog_images/${image.filename}` : null;
+      const finalImageUrl = image
+        ? `/uploads/catalog_images/${image.filename}`
+        : null;
 
       const createCatalogDto: CreateCatalogDto = {
         name: formData.name,
         category: formData.category,
         size: formData.size,
         qty: parseInt(formData.qty, 10),
-        price: formData.price.replace(/[^\d.-]/g, ''), 
+        price: formData.price.replace(/[^\d.-]/g, ''),
         isEnabled: formData.isEnabled === 'true',
-        image: finalImageUrl, 
+        image: finalImageUrl,
       };
 
-      const createdCatalog = await this.catalogService.createCatalog(createCatalogDto);
+      const createdCatalog =
+        await this.catalogService.createCatalog(createCatalogDto);
 
       const formattedPrice = `Rp${parseFloat(createCatalogDto.price)
         .toLocaleString('id-ID', {
@@ -81,7 +92,15 @@ export class CatalogController {
 
   @Get(':imgpath')
   seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
-    const filePath = join(__dirname, '..', '..', '..', 'uploads', 'catalog_images', image); 
+    const filePath = join(
+      __dirname,
+      '..',
+      '..',
+      '..',
+      'uploads',
+      'catalog_images',
+      image,
+    );
     res.sendFile(filePath, (err) => {
       if (err) {
         res.status(404).send('File not found.');
@@ -89,9 +108,9 @@ export class CatalogController {
     });
   }
 
-  @Get(':id')
+  @Get('find/:id')
   async findOne(@Param('id') id: string): Promise<Catalog> {
-    return this.catalogService.findOne(+id);
+    return this.catalogService.findOne(+id); // Convert string to number
   }
 
   @Put(':id')
@@ -122,4 +141,15 @@ export class CatalogController {
       );
     }
   }
+  @Get('detail')
+  async getProductDetail(
+    @Query('category') category: string,
+    @Query('name') name: string,
+  ): Promise<Catalog> {
+    if (!name || !category) {
+      throw new HttpException('Missing query parameters', HttpStatus.BAD_REQUEST);
+    }
+    return this.catalogService.findByNameAndCategory(name, category);
+  }
+  
 }
