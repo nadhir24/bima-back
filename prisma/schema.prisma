@@ -1,8 +1,6 @@
-// prisma/schema.prisma
-
 datasource db {
-  provider = "postgresql" // Change to your database provider if needed
-  url      = env("DATABASE_URL") // Environment variable for the database connection URL
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
@@ -10,33 +8,40 @@ generator client {
 }
 
 model User {
-  id              Int            @id @default(autoincrement())
-  fullName        String
-  phoneNumber     String
-  email           String         @unique
-  password        String
-  createdAt       DateTime       @default(now())
-  carts           Cart[]
-  payments        Payment[]
-  userProfile     UserProfile?
-  userPassword    UserPassword?
-  userRoles       UserRole[]
-  photoProfile    String?      
+  id           Int           @id @default(autoincrement())
+  fullName     String
+  phoneNumber  String
+  email        String        @unique
+  password     String
+  createdAt    DateTime      @default(now())
+  carts        Cart[]
+  payments     Payment[]
+  userProfile  UserProfile?
+  userPassword UserPassword?
+  userRoles    UserRole[]
+  photoProfile String?
+
   @@map("users")
 }
 
 model Catalog {
-  id        Int      @id @default(autoincrement())
+  id        Int     @id @default(autoincrement())
   name      String
+  slug      String  @unique
   category  String
-  size      String   
   qty       Int
   isEnabled Boolean
-  image     String
-  price     String  
-  carts     Cart[]
+  image     String?
+  sizes     Size[]  @relation("CatalogSizes") // Define the relation to Size
+  carts     Cart[]  @relation("CatalogCarts")
+}
 
-  @@map("catalog")
+model Size {
+  id        Int     @id @default(autoincrement())
+  size      String
+  price     String // Keep this as String for formatted prices
+  catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id]) // Add the relation to Catalog
+  catalogId Int
 }
 
 model Cart {
@@ -44,7 +49,7 @@ model Cart {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   catalogId Int
-  catalog   Catalog  @relation(fields: [catalogId], references: [id])
+  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id]) // This line references CatalogCarts
   quantity  Int
   createdAt DateTime @default(now())
   paymentId Int?
@@ -66,57 +71,57 @@ model Payment {
 }
 
 model UserProfile {
-  id              Int      @id @default(autoincrement()) @map("uspro_id")
-  birthDate       String?  @map("uspro_birt_date")
-  gender          String?  @map("uspro_gender")
-  addressId       Int?     @map("uspro_addr_id")
-  userId          Int?     @map("uspro_user_id") @unique
-  address         Address? @relation(fields: [addressId], references: [id])
-  user            User?    @relation(fields: [userId], references: [id])
+  id        Int      @id @default(autoincrement()) @map("uspro_id")
+  birthDate String?  @map("uspro_birth_date")
+  gender    String?  @map("uspro_gender")
+  addressId Int?     @map("uspro_addr_id")
+  userId    Int?     @unique @map("uspro_user_id")
+  address   Address? @relation(fields: [addressId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
 
   @@index([id], name: "pkey_user_profiles")
   @@map("user_profiles")
 }
 
 model Address {
-  id          Int       @id @default(autoincrement())
-  street      String
-  city        String
-  state       String
-  postalCode  String
-  country     String
+  id           Int           @id @default(autoincrement())
+  street       String
+  city         String
+  state        String
+  postalCode   String
+  country      String
   userProfiles UserProfile[]
 
   @@map("address")
 }
 
 model Role {
-  id       Int        @id @default(autoincrement()) @map("role_id")
-  name     String?    @map("role_name")
+  id   Int     @id @default(autoincrement()) @map("role_id")
+  name String? @map("role_name")
 
   userRoles UserRole[]
 
-  @@index([id], name: "pkey_users_user_role_id")
+  @@index([id], name: "pkey_roles")
   @@map("roles")
 }
 
 model UserRole {
-  userId  Int
-  roleId  Int
+  userId Int
+  roleId Int
 
-  user   User @relation(fields: [userId], references: [id])
-  role   Role @relation(fields: [roleId], references: [id])
+  user User @relation(fields: [userId], references: [id])
+  role Role @relation(fields: [roleId], references: [id])
 
   @@id([userId, roleId])
   @@map("user_roles")
 }
 
 model UserPassword {
-  id             Int    @id @default(autoincrement())
-  userId         Int    @unique
-  passwordHash   String?
-  passwordSalt   String?
-  user           User   @relation(fields: [userId], references: [id])
+  id           Int     @id @default(autoincrement())
+  userId       Int     @unique
+  passwordHash String?
+  passwordSalt String?
+  user         User    @relation(fields: [userId], references: [id])
 
   @@map("user_password")
 }
