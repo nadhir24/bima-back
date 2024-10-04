@@ -19,29 +19,26 @@ import { join, extname } from 'path';
 import { Response } from 'express';
 import { CatalogService } from './catalog.service';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { Catalog, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
+import { FindCatalogDto } from './dto/find-catalog.dto';
+import { Catalog } from '@prisma/client';
 
 @Controller('catalog')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
+  // Fetch all catalogs
   @Get('findall')
   async findAll(): Promise<Catalog[]> {
     return this.catalogService.findAll();
   }
 
+  // Create new catalog with image upload
   @Post('create')
   @UseInterceptors(
     FileInterceptor('image', {
       storage: diskStorage({
-        destination: join(
-          __dirname,
-          '..',
-          '..',
-          '..',
-          'uploads',
-          'catalog_images',
-        ),
+        destination: join(__dirname, '..', '..', '..', 'uploads', 'catalog_images'),
         filename: (req, file, cb) => {
           const filename: string = file.originalname.split('.')[0];
           const extension: string = extname(file.originalname);
@@ -55,33 +52,28 @@ export class CatalogController {
     @UploadedFile() image: Express.Multer.File,
   ) {
     try {
-      const finalImageUrl = image
-        ? `/uploads/catalog_images/${image.filename}`
-        : null;
+      // Correctly format image URL
+      const finalImageUrl = image ? `/catalog/images/${image.filename}` : null;
 
+      // Ensure isEnabled is a boolean value
+      const isEnabled = formData.isEnabled === 'true';
+
+      // Create DTO object, converting size and price as needed
       const createCatalogDto: CreateCatalogDto = {
         name: formData.name,
         category: formData.category,
-        size: formData.size,
+        sizes: formData.sizes.map((sizeData) => ({
+          size: sizeData.size, // Ensure size is a string
+          price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')), // Convert price to a number
+        })),
         qty: parseInt(formData.qty, 10),
-        price: formData.price.replace(/[^\d.-]/g, ''),
-        isEnabled: formData.isEnabled === 'true',
+        isEnabled: isEnabled,
         image: finalImageUrl,
       };
 
-      const createdCatalog =
-        await this.catalogService.createCatalog(createCatalogDto);
-
-      const formattedPrice = `Rp${parseFloat(createCatalogDto.price)
-        .toLocaleString('id-ID', {
-          minimumFractionDigits: 3,
-        })
-        .replace('.', ',')}`;
-
-      return {
-        ...createdCatalog,
-        price: formattedPrice,
-      };
+      // Call the service to create a new catalog entry
+      const createdCatalog = await this.catalogService.createCatalog(createCatalogDto);
+      return createdCatalog; // Return the newly created catalog entry
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to create catalog entry',
@@ -90,17 +82,20 @@ export class CatalogController {
     }
   }
 
-  @Get(':imgpath')
+  // Fetch catalog by slug
+  @Get(':slug')
+  async findBySlug(@Param('slug') slug: string): Promise<Catalog> {
+    const catalog = await this.catalogService.findBySlug(slug);
+    if (!catalog) {
+      throw new HttpException('Catalog entry not found', HttpStatus.NOT_FOUND);
+    }
+    return catalog;
+  }
+
+  // Serve uploaded image files
+  @Get('images/:imgpath')
   seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
-    const filePath = join(
-      __dirname,
-      '..',
-      '..',
-      '..',
-      'uploads',
-      'catalog_images',
-      image,
-    );
+    const filePath = join(process.cwd(), 'uploads', 'catalog_images', image);
     res.sendFile(filePath, (err) => {
       if (err) {
         res.status(404).send('File not found.');
@@ -108,11 +103,13 @@ export class CatalogController {
     });
   }
 
+  // Find catalog by ID
   @Get('find/:id')
   async findOne(@Param('id') id: string): Promise<Catalog> {
     return this.catalogService.findOne(+id); // Convert string to number
   }
 
+  // Update catalog entry
   @Put(':id')
   async update(
     @Param('id') id: string,
@@ -121,11 +118,21 @@ export class CatalogController {
     return this.catalogService.update(+id, data);
   }
 
+  // Get product details by name and category
+  @Get('detail')
+  async getProdukDetail(
+    @Query() findCatalogDto: FindCatalogDto,
+  ): Promise<Catalog> {
+    return this.catalogService.findByNameAndCategory(findCatalogDto);
+  }
+
+  // Delete catalog by ID
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<Catalog> {
     return this.catalogService.remove(+id);
   }
 
+  // Handle catalog purchase and update quantity
   @Post('purchase')
   async purchase(
     @Body('userId') userId: number,
@@ -141,15 +148,4 @@ export class CatalogController {
       );
     }
   }
-  @Get('detail')
-  async getProductDetail(
-    @Query('category') category: string,
-    @Query('name') name: string,
-  ): Promise<Catalog> {
-    if (!name || !category) {
-      throw new HttpException('Missing query parameters', HttpStatus.BAD_REQUEST);
-    }
-    return this.catalogService.findByNameAndCategory(name, category);
-  }
-  
 }

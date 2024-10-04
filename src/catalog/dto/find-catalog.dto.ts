@@ -1,5 +1,9 @@
+import { IsNotEmpty } from 'class-validator';
+
 export class FindCatalogDto {
-    name: string;
-    category: string;
-  }
-  
+  @IsNotEmpty()
+  name: string;
+
+  @IsNotEmpty()
+  category: string;
+}
