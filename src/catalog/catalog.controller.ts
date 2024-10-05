@@ -38,7 +38,14 @@ export class CatalogController {
   @UseInterceptors(
     FileInterceptor('image', {
       storage: diskStorage({
-        destination: join(__dirname, '..', '..', '..', 'uploads', 'catalog_images'),
+        destination: join(
+          __dirname,
+          '..',
+          '..',
+          '..',
+          'uploads',
+          'catalog_images',
+        ),
         filename: (req, file, cb) => {
           const filename: string = file.originalname.split('.')[0];
           const extension: string = extname(file.originalname);
@@ -53,7 +60,7 @@ export class CatalogController {
   ) {
     try {
       // Correctly format image URL
-      const finalImageUrl = image ? `/catalog/images/${image.filename}` : null;
+      const finalImageUrl = image ? `/catalog/${image.filename}` : null;
 
       // Ensure isEnabled is a boolean value
       const isEnabled = formData.isEnabled === 'true';
@@ -72,7 +79,8 @@ export class CatalogController {
       };
 
       // Call the service to create a new catalog entry
-      const createdCatalog = await this.catalogService.createCatalog(createCatalogDto);
+      const createdCatalog =
+        await this.catalogService.createCatalog(createCatalogDto);
       return createdCatalog; // Return the newly created catalog entry
     } catch (error) {
       throw new HttpException(
@@ -83,9 +91,15 @@ export class CatalogController {
   }
 
   // Fetch catalog by slug
-  @Get(':slug')
-  async findBySlug(@Param('slug') slug: string): Promise<Catalog> {
-    const catalog = await this.catalogService.findBySlug(slug);
+  @Get(':category/:slug') // Change this line
+  async findByCategoryAndSlug(
+    @Param('category') category: string,
+    @Param('slug') slug: string,
+  ): Promise<Catalog> {
+    const catalog = await this.catalogService.findByCategoryAndSlug(
+      category,
+      slug,
+    );
     if (!catalog) {
       throw new HttpException('Catalog entry not found', HttpStatus.NOT_FOUND);
     }
@@ -93,7 +107,8 @@ export class CatalogController {
   }
 
   // Serve uploaded image files
-  @Get('images/:imgpath')
+  // Serve uploaded image files
+  @Get(':imgpath')
   seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
     const filePath = join(process.cwd(), 'uploads', 'catalog_images', image);
     res.sendFile(filePath, (err) => {
@@ -104,10 +119,10 @@ export class CatalogController {
   }
 
   // Find catalog by ID
-  @Get('find/:id')
+  @Get(':id')
   async findOne(@Param('id') id: string): Promise<Catalog> {
-    return this.catalogService.findOne(+id); // Convert string to number
-  }
+      return await this.catalogService.findOne(+id);
+  }    
 
   // Update catalog entry
   @Put(':id')
@@ -118,16 +133,8 @@ export class CatalogController {
     return this.catalogService.update(+id, data);
   }
 
-  // Get product details by name and category
-  @Get('detail')
-  async getProdukDetail(
-    @Query() findCatalogDto: FindCatalogDto,
-  ): Promise<Catalog> {
-    return this.catalogService.findByNameAndCategory(findCatalogDto);
-  }
-
   // Delete catalog by ID
-  @Delete(':id')
+  @Delete('/:id')
   async remove(@Param('id') id: string): Promise<Catalog> {
     return this.catalogService.remove(+id);
   }
