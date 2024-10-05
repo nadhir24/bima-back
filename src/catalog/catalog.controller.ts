@@ -28,7 +28,7 @@ export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
   // Fetch all catalogs
-  @Get('findall')
+  @Get()
   async findAll(): Promise<Catalog[]> {
     return this.catalogService.findAll();
   }
@@ -89,8 +89,59 @@ export class CatalogController {
       );
     }
   }
+  @Get(':id')
+  async findOne(@Param('id') id: string): Promise<Catalog> {
+    return await this.catalogService.findOne(+id);
+  }
 
+  // Find catalog by ID
+
+  // Update catalog entry
+  @Put(':id')
+  async updateCatalog(
+    @Param('id') id: string,
+    @Body() formData: any, // Terima data sebagai 'any' untuk fleksibilitas
+  ): Promise<Catalog> {
+    try {
+      // Transformasi formData menjadi objek yang sesuai untuk Prisma
+      const updateCatalogDto: Prisma.CatalogUpdateInput = {
+        name: formData.name,
+        category: formData.category,
+        qty: parseInt(formData.qty, 10), // Pastikan qty adalah integer
+        isEnabled: formData.isEnabled === 'true', // Konversi isEnabled ke boolean
+        image: formData.image, // Langsung gunakan image dari formData
+        sizes: {
+          deleteMany: {}, // Hapus ukuran lama terlebih dahulu
+          create: formData.sizes.map((sizeData) => ({
+            size: sizeData.size,
+            price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')), // Pastikan harga adalah float
+          })),
+        },
+      };
+
+      // Panggil service untuk update catalog
+      return await this.catalogService.update(+id, updateCatalogDto);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to update catalog entry',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+  }
+  @Delete(':id')
+  async remove(@Param('id') id: string): Promise<Catalog> {
+    return this.catalogService.remove(+id);
+  }
   // Fetch catalog by slug
+  @Get(':imgpath')
+  seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
+    const filePath = join(process.cwd(), 'uploads', 'catalog_images', image);
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        res.status(404).send('File not found.');
+      }
+    });
+  }
   @Get(':category/:slug') // Change this line
   async findByCategoryAndSlug(
     @Param('category') category: string,
@@ -108,51 +159,21 @@ export class CatalogController {
 
   // Serve uploaded image files
   // Serve uploaded image files
-  @Get(':imgpath')
-  seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
-    const filePath = join(process.cwd(), 'uploads', 'catalog_images', image);
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        res.status(404).send('File not found.');
-      }
-    });
-  }
 
-  // Find catalog by ID
-  @Get(':id')
-  async findOne(@Param('id') id: string): Promise<Catalog> {
-      return await this.catalogService.findOne(+id);
-  }    
-
-  // Update catalog entry
-  @Put(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() data: Prisma.CatalogUpdateInput,
-  ): Promise<Catalog> {
-    return this.catalogService.update(+id, data);
-  }
-
-  // Delete catalog by ID
-  @Delete('/:id')
-  async remove(@Param('id') id: string): Promise<Catalog> {
-    return this.catalogService.remove(+id);
-  }
-
-  // Handle catalog purchase and update quantity
-  @Post('purchase')
-  async purchase(
-    @Body('userId') userId: number,
-    @Body('catalogId') catalogId: number,
-    @Body('quantity') quantity: number,
-  ): Promise<void> {
-    try {
-      await this.catalogService.updateQuantity(catalogId, quantity);
-    } catch (error) {
-      throw new HttpException(
-        'Failed to process purchase',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
+  // // Handle catalog purchase and update quantity
+  // @Post('purchase')
+  // async purchase(
+  //   @Body('userId') userId: number,
+  //   @Body('catalogId') catalogId: number,
+  //   @Body('quantity') quantity: number,
+  // ): Promise<void> {
+  //   try {
+  //     await this.catalogService.updateQuantity(catalogId, quantity);
+  //   } catch (error) {
+  //     throw new HttpException(
+  //       'Failed to process purchase',
+  //       HttpStatus.INTERNAL_SERVER_ERROR,
+  //     );
+  //   }
+  // }
 }

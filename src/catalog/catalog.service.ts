@@ -70,36 +70,36 @@ export class CatalogService {
     }
   }
 
-  async updateQuantity(catalogId: number, quantity: number): Promise<void> {
-    try {
-      const existingCatalog = await this.prisma.catalog.findUnique({
-        where: { id: catalogId },
-      });
+  // async updateQuantity(catalogId: number, quantity: number): Promise<void> {
+  //   try {
+  //     const existingCatalog = await this.prisma.catalog.findUnique({
+  //       where: { id: catalogId },
+  //     });
 
-      if (!existingCatalog) {
-        throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
-      }
+  //     if (!existingCatalog) {
+  //       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
+  //     }
 
-      const updatedQty = existingCatalog.qty - quantity;
+  //     const updatedQty = existingCatalog.qty - quantity;
 
-      if (updatedQty < 0) {
-        throw new HttpException('Not enough stock', HttpStatus.BAD_REQUEST);
-      }
+  //     if (updatedQty < 0) {
+  //       throw new HttpException('Not enough stock', HttpStatus.BAD_REQUEST);
+  //     }
 
-      await this.prisma.catalog.update({
-        where: { id: catalogId },
-        data: { qty: updatedQty },
-      });
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Failed to update catalog quantity',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
+  //     await this.prisma.catalog.update({
+  //       where: { id: catalogId },
+  //       data: { qty: updatedQty },
+  //     });
+  //   } catch (error) {
+  //     if (error instanceof HttpException) {
+  //       throw error;
+  //     }
+  //     throw new HttpException(
+  //       'Failed to update catalog quantity',
+  //       HttpStatus.INTERNAL_SERVER_ERROR,
+  //     );
+  //   }
+  // }
   async findOne(id: number): Promise<Catalog> {
     console.log('fetch catalog with ID:', id);
     try {
@@ -187,13 +187,44 @@ export class CatalogService {
 
   async update(id: number, data: Prisma.CatalogUpdateInput): Promise<Catalog> {
     try {
+      // Pastikan record Catalog ada sebelum update
+      const catalog = await this.prisma.catalog.findUnique({
+        where: { id },
+      });
+
+      if (!catalog) {
+        throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
+      }
+
+      const updateCatalogDto: Prisma.CatalogUpdateInput = {
+        name: data.name,
+        category: data.category,
+        qty: data.qty,
+        isEnabled: data.isEnabled,
+        image: data.image,
+        sizes: {
+          deleteMany: {}, // Hapus semua ukuran lama terlebih dahulu
+          create: Array.isArray(data.sizes?.create)
+            ? data.sizes.create.map(
+                (sizeData: { size: any; price: { toString: () => any } }) => ({
+                  size: sizeData.size,
+                  price: sizeData.price.toString(), // Konversi price menjadi string
+                }),
+              )
+            : {
+                size: data.sizes?.create.size,
+                price: data.sizes?.create.price.toString(),
+              },
+        },
+      };
+
       return await this.prisma.catalog.update({
         where: { id },
-        data,
+        data: updateCatalogDto,
       });
     } catch (error) {
       throw new HttpException(
-        'Failed to update catalog entry',
+        error.message || 'Failed to update catalog entry',
         HttpStatus.BAD_REQUEST,
       );
     }
