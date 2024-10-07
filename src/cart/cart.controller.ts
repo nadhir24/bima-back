@@ -12,7 +12,7 @@ import {
 import { CartService } from './cart.service';
 import { Cart as CartModel, Prisma } from '@prisma/client';
 
-@Controller('carts')
+@Controller('cart')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 

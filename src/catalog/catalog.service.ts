@@ -1,133 +1,76 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { Prisma, Catalog } from '@prisma/client';
+import { Catalog } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { FindCatalogDto } from './dto/find-catalog.dto';
 import slugify from 'slugify';
-import { PrismaClientKnownRequestError } from '@prisma/client/runtime/library';
+import { UpdateCatalogDto } from './dto/update-catalog.dto';
 
 @Injectable()
 export class CatalogService {
   constructor(private prisma: PrismaService) {}
-
-  createSlug(name: string): string {
-    return slugify(name, {
+  private createSlug(
+    name: string,
+    category: string,
+  ): { productSlug: string; categorySlug: string } {
+    const productSlug = slugify(name, {
       lower: true,
       strict: true,
       locale: 'id',
     });
+    const categorySlug = slugify(category, {
+      lower: true,
+      strict: true,
+      locale: 'id',
+    });
+
+    return { productSlug, categorySlug };
   }
 
-  async findByCategoryAndSlug(
-    category: string,
-    slug: string,
+  async findBySlug(
+    categorySlug: string,
+    productSlug: string,
   ): Promise<Catalog> {
-    try {
-      const catalog = await this.prisma.catalog.findFirst({
-        where: {
-          slug,
-          category,
-        },
-        include: { sizes: true }, // Include sizes if needed
-      });
-
-      if (!catalog) {
-        throw new HttpException(
-          'Catalog entry not found',
-          HttpStatus.NOT_FOUND,
-        );
-      }
-
-      return catalog;
-    } catch (error) {
-      throw new HttpException(
-        'Failed to retrieve catalog entry',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    console.log(`Querying database with categorySlug: ${categorySlug}, productSlug: ${productSlug}`);
+    
+    return await this.prisma.catalog.findFirst({
+      where: {
+        productSlug: productSlug, 
+        categorySlug: categorySlug,
+      },
+      include: { sizes: true },
+    });
   }
 
   async findAll(): Promise<Catalog[]> {
-    try {
-      const catalogs = await this.prisma.catalog.findMany({
-        include: { sizes: true },
-      });
+    const catalogs = await this.prisma.catalog.findMany({
+      include: { sizes: true },
+    });
 
-      // Format sizes prices for response
-      return catalogs.map((catalog) => ({
-        ...catalog,
-        sizes: catalog.sizes.map((size) => ({
-          size: size.size,
-          price: size.price, // Keep it as a string from the database
-        })),
-      }));
-    } catch (error) {
-      console.error('Error retrieving catalog entries:', error);
-      throw new HttpException(
-        'Failed to retrieve catalog entries',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
+    return catalogs.map((catalog) => ({
+      ...catalog,
+      sizes: catalog.sizes.map((size) => ({
+        size: size.size,
+        price: size.price,
+      })),
+    }));
   }
 
-  // async updateQuantity(catalogId: number, quantity: number): Promise<void> {
-  //   try {
-  //     const existingCatalog = await this.prisma.catalog.findUnique({
-  //       where: { id: catalogId },
-  //     });
-
-  //     if (!existingCatalog) {
-  //       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
-  //     }
-
-  //     const updatedQty = existingCatalog.qty - quantity;
-
-  //     if (updatedQty < 0) {
-  //       throw new HttpException('Not enough stock', HttpStatus.BAD_REQUEST);
-  //     }
-
-  //     await this.prisma.catalog.update({
-  //       where: { id: catalogId },
-  //       data: { qty: updatedQty },
-  //     });
-  //   } catch (error) {
-  //     if (error instanceof HttpException) {
-  //       throw error;
-  //     }
-  //     throw new HttpException(
-  //       'Failed to update catalog quantity',
-  //       HttpStatus.INTERNAL_SERVER_ERROR,
-  //     );
-  //   }
-  // }
   async findOne(id: number): Promise<Catalog> {
-    console.log('fetch catalog with ID:', id);
-    try {
-      const catalog = await this.prisma.catalog.findUnique({
-        where: { id },
-        include: { sizes: true },
-      });
+    const catalog = await this.prisma.catalog.findUnique({
+      where: { id },
+      include: { sizes: true },
+    });
 
-      console.log('catalog result:', catalog);
-
-      if (!catalog) {
-        throw new HttpException(
-          'Catalog entry not found',
-          HttpStatus.NOT_FOUND,
-        );
-      }
-      return catalog;
-    } catch (error) {
-      throw new HttpException(
-        `Failed to retrieve catalog entry`,
-        HttpStatus.BAD_REQUEST,
-      );
+    if (!catalog) {
+      throw new HttpException('Catalog entry not found', HttpStatus.NOT_FOUND);
     }
+
+    return catalog;
   }
   async createCatalog(createCatalogDto: CreateCatalogDto): Promise<Catalog> {
-    const { name, category, qty, isEnabled, image, sizes } = createCatalogDto;
+    const { name, category, sizes } = createCatalogDto;
 
-    // Check if sizes is defined and is an array
+    // Validate sizes array
     if (!sizes || !Array.isArray(sizes)) {
       throw new HttpException(
         'Sizes must be provided and should be an array',
@@ -135,12 +78,12 @@ export class CatalogService {
       );
     }
 
-    // Create slug
-    const slug = this.createSlug(name);
+    // Generate slugs using the method
+    const { productSlug, categorySlug } = this.createSlug(name, category);
 
-    // Check for existing catalog with the same slug
+    // Check if catalog with the same product slug exists
     const existingCatalog = await this.prisma.catalog.findUnique({
-      where: { slug },
+      where: { slug: productSlug },
     });
 
     if (existingCatalog) {
@@ -150,112 +93,88 @@ export class CatalogService {
       );
     }
 
-    // Format sizes for database insertion
-    // Format sizes for database insertion
-    const formatPrice = (price: string | number): string => {
-      const numericPrice =
-        typeof price === 'string'
-          ? parseFloat(price.replace(/[^\d]/g, ''))
-          : price;
-      return `Rp${numericPrice.toLocaleString('id-ID', { minimumFractionDigits: 3 }).replace('.', ',')}`;
-    };
-
-    // Format sizes for database insertion
+    // Format sizes for the database
     const formattedSizes = sizes.map((size) => ({
       size: size.size,
-      price: formatPrice(size.price),
+      price: this.formatPrice(size.price), // Ensure this returns a string
     }));
 
-    // Create the catalog entry and include the sizes
+    // Create the new catalog entry
     const newCatalog = await this.prisma.catalog.create({
       data: {
-        name,
-        slug,
-        category,
-        qty,
-        isEnabled,
-        image,
-        sizes: {
-          create: formattedSizes,
-        },
+        name: name, // Required fields
+        category: category, // Required fields
+        qty: createCatalogDto.qty, // Required fields
+        isEnabled: createCatalogDto.isEnabled, // Required fields
+        image: createCatalogDto.image, // Optional fields
+        slug: productSlug, // Required field
+        productSlug: productSlug, // Ensure this is provided
+        categorySlug: categorySlug, // Optional field
+        sizes: { create: formattedSizes }, // Create sizes relation
       },
-      include: { sizes: true },
+      include: { sizes: true }, // Include sizes in the response
     });
 
-    return newCatalog;
+    return newCatalog; // Return the newly created catalog
   }
 
-  async update(id: number, data: Prisma.CatalogUpdateInput): Promise<Catalog> {
-    try {
-      // Pastikan record Catalog ada sebelum update
-      const catalog = await this.prisma.catalog.findUnique({
-        where: { id },
-      });
-
-      if (!catalog) {
-        throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
-      }
-
-      const updateCatalogDto: Prisma.CatalogUpdateInput = {
-        name: data.name,
-        category: data.category,
-        qty: data.qty,
-        isEnabled: data.isEnabled,
-        image: data.image,
-        sizes: {
-          deleteMany: {}, // Hapus semua ukuran lama terlebih dahulu
-          create: Array.isArray(data.sizes?.create)
-            ? data.sizes.create.map(
-                (sizeData: { size: any; price: { toString: () => any } }) => ({
-                  size: sizeData.size,
-                  price: sizeData.price.toString(), // Konversi price menjadi string
-                }),
-              )
-            : {
-                size: data.sizes?.create.size,
-                price: data.sizes?.create.price.toString(),
-              },
-        },
-      };
-
-      return await this.prisma.catalog.update({
-        where: { id },
-        data: updateCatalogDto,
-      });
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to update catalog entry',
-        HttpStatus.BAD_REQUEST,
-      );
+  async updateCatalog(
+    id: number,
+    updateCatalogDto: UpdateCatalogDto,
+  ): Promise<Catalog> {
+    // Verifikasi bahwa katalog ada
+    const existingCatalog = await this.prisma.catalog.findUnique({
+      where: { id },
+    });
+    if (!existingCatalog) {
+      throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
+
+    // Format ukuran
+    const formattedSizes = updateCatalogDto.sizes.map((size) => ({
+      size: size.size,
+      price: this.formatPrice(size.price), // Pastikan harga diformat sebagai string
+    }));
+
+    // Lakukan pembaruan
+    const updatedCatalog = await this.prisma.catalog.update({
+      where: { id },
+      data: {
+        name: updateCatalogDto.name,
+        category: updateCatalogDto.category,
+        qty: updateCatalogDto.qty,
+        isEnabled: updateCatalogDto.isEnabled,
+        image: updateCatalogDto.image,
+        sizes: {
+          deleteMany: { catalogId: id }, // Menghapus semua ukuran terkait
+          create: formattedSizes, // Membuat ukuran baru
+        },
+      },
+      include: { sizes: true }, // Sertakan ukuran dalam hasil
+    });
+
+    return updatedCatalog;
   }
 
   async remove(id: number): Promise<Catalog> {
-    try {
-      // Pertama, hapus semua entri di tabel Size yang terkait dengan catalog
-      await this.prisma.size.deleteMany({
-        where: { catalogId: id },
-      });
-
-      // Kemudian, hapus entri di tabel catalog
-      return await this.prisma.catalog.delete({
-        where: { id },
-      });
-    } catch (error) {
-      if (error instanceof PrismaClientKnownRequestError) {
-        // Tangani kesalahan khusus dari Prisma jika ada
-        if (error.code === 'P2025') {
-          throw new HttpException(
-            'Catalog entry not found',
-            HttpStatus.NOT_FOUND,
-          );
-        }
-      }
-      console.error(error);
-      throw new HttpException(
-        error.message || 'Failed to remove catalog entry',
-        HttpStatus.BAD_REQUEST,
-      );
+    const existingCatalog = await this.prisma.catalog.findUnique({
+      where: { id },
+    });
+    if (!existingCatalog) {
+      throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
+
+    await this.prisma.size.deleteMany({ where: { catalogId: id } });
+    return this.prisma.catalog.delete({
+      where: { id },
+    });
+  }
+
+  private formatPrice(price: string | number): string {
+    const numericPrice =
+      typeof price === 'string'
+        ? parseFloat(price.replace(/[^\d]/g, ''))
+        : price;
+    return `Rp${numericPrice.toLocaleString('id-ID', { minimumFractionDigits: 3 }).replace('.', ',')}`;
   }
 }

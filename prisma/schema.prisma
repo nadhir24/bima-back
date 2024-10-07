@@ -24,17 +24,22 @@ model User {
   @@map("users")
 }
 
-model Catalog {
-  id        Int     @id @default(autoincrement())
-  name      String
-  slug      String  @unique
-  category  String
-  qty       Int
-  isEnabled Boolean
-  image     String?
-  sizes     Size[]  @relation("CatalogSizes") // Define the relation to Size
-  carts     Cart[]  @relation("CatalogCarts")
+model Catalog { 
+    id          Int     @id @default(autoincrement())
+    name        String
+    slug        String  @unique
+    category    String
+    categorySlug String // Change back to non-nullable
+    qty         Int
+    isEnabled   Boolean
+    image       String?
+    sizes       Size[]  @relation("CatalogSizes") // Define the relation to Size
+    carts       Cart[]  @relation("CatalogCarts")
+    productSlug String // Change back to non-nullable
 }
+
+
+
 
 model Size {
   id        Int     @id @default(autoincrement())

@@ -1,5 +1,12 @@
 import { Type } from 'class-transformer';
-import { IsString, IsNumber, IsBoolean, IsArray, ValidateNested, IsOptional } from 'class-validator';
+import {
+  IsString,
+  IsNumber,
+  IsBoolean,
+  IsArray,
+  ValidateNested,
+  IsOptional,
+} from 'class-validator';
 
 class SizeDto {
   @IsString()
@@ -25,6 +32,14 @@ export class CreateCatalogDto {
   @IsString()
   @IsOptional()
   image?: string;
+
+  @IsOptional()
+  @IsString()
+  categorySlug?: string;
+
+  @IsOptional()
+  @IsString()
+  productSlug?: string;
 
   @IsArray()
   @ValidateNested({ each: true })

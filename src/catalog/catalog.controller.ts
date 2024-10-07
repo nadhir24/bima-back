@@ -10,8 +10,8 @@ import {
   Param,
   Res,
   Delete,
-  Put,
-  Query,
+  Patch,
+  ParseIntPipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -19,21 +19,18 @@ import { join, extname } from 'path';
 import { Response } from 'express';
 import { CatalogService } from './catalog.service';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { Prisma } from '@prisma/client';
-import { FindCatalogDto } from './dto/find-catalog.dto';
 import { Catalog } from '@prisma/client';
+import { UpdateCatalogDto } from './dto/update-catalog.dto';
 
 @Controller('catalog')
 export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
-  // Fetch all catalogs
   @Get()
   async findAll(): Promise<Catalog[]> {
     return this.catalogService.findAll();
   }
 
-  // Create new catalog with image upload
   @Post('create')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -47,8 +44,8 @@ export class CatalogController {
           'catalog_images',
         ),
         filename: (req, file, cb) => {
-          const filename: string = file.originalname.split('.')[0];
-          const extension: string = extname(file.originalname);
+          const filename = file.originalname.split('.')[0];
+          const extension = extname(file.originalname);
           cb(null, `${filename}-${Date.now()}${extension}`);
         },
       }),
@@ -59,29 +56,25 @@ export class CatalogController {
     @UploadedFile() image: Express.Multer.File,
   ) {
     try {
-      // Correctly format image URL
       const finalImageUrl = image ? `/catalog/${image.filename}` : null;
-
-      // Ensure isEnabled is a boolean value
       const isEnabled = formData.isEnabled === 'true';
-
-      // Create DTO object, converting size and price as needed
+      const productSlug = formData.name.toLowerCase().replace(/\s+/g, '-');
+      const categorySlug = formData.category.toLowerCase().replace(/\s+/g, '-');
       const createCatalogDto: CreateCatalogDto = {
         name: formData.name,
         category: formData.category,
+        categorySlug, // Include category slug
+        productSlug, // Include product slug
         sizes: formData.sizes.map((sizeData) => ({
-          size: sizeData.size, // Ensure size is a string
-          price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')), // Convert price to a number
+          size: sizeData.size,
+          price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')),
         })),
         qty: parseInt(formData.qty, 10),
-        isEnabled: isEnabled,
+        isEnabled,
         image: finalImageUrl,
       };
 
-      // Call the service to create a new catalog entry
-      const createdCatalog =
-        await this.catalogService.createCatalog(createCatalogDto);
-      return createdCatalog; // Return the newly created catalog entry
+      return await this.catalogService.createCatalog(createCatalogDto);
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to create catalog entry',
@@ -89,38 +82,59 @@ export class CatalogController {
       );
     }
   }
+
   @Get(':id')
   async findOne(@Param('id') id: string): Promise<Catalog> {
-    return await this.catalogService.findOne(+id);
+    return this.catalogService.findOne(+id);
   }
 
-  // Find catalog by ID
-
-  // Update catalog entry
-  @Put(':id')
+  @Patch(':id')
+  @UseInterceptors(
+    FileInterceptor('image', {
+      storage: diskStorage({
+        destination: join(
+          __dirname,
+          '..',
+          '..',
+          '..',
+          'uploads',
+          'catalog_images',
+        ),
+        filename: (req, file, cb) => {
+          const filename = file.originalname.split('.')[0];
+          const extension = extname(file.originalname);
+          cb(null, `${filename}-${Date.now()}${extension}`);
+        },
+      }),
+    }),
+  )
   async updateCatalog(
     @Param('id') id: string,
-    @Body() formData: any, // Terima data sebagai 'any' untuk fleksibilitas
+    @Body() formData: any,
+    @UploadedFile() image: Express.Multer.File,
   ): Promise<Catalog> {
     try {
-      // Transformasi formData menjadi objek yang sesuai untuk Prisma
-      const updateCatalogDto: Prisma.CatalogUpdateInput = {
+      const finalImageUrl = image ? `/catalog/images/${image.filename}` : null;
+      const isEnabled = formData.isEnabled === 'true';
+
+      // Prepare the update DTO similar to the createCatalog method
+      const updateCatalogDto: UpdateCatalogDto = {
         name: formData.name,
         category: formData.category,
-        qty: parseInt(formData.qty, 10), // Pastikan qty adalah integer
-        isEnabled: formData.isEnabled === 'true', // Konversi isEnabled ke boolean
-        image: formData.image, // Langsung gunakan image dari formData
-        sizes: {
-          deleteMany: {}, // Hapus ukuran lama terlebih dahulu
-          create: formData.sizes.map((sizeData) => ({
-            size: sizeData.size,
-            price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')), // Pastikan harga adalah float
-          })),
-        },
+        sizes: formData.sizes.map((sizeData: any) => ({
+          size: sizeData.size,
+          price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')),
+        })),
+        qty: parseInt(formData.qty, 10),
+        isEnabled,
+        image: finalImageUrl || formData.existingImage, // Fallback to existing image if no new image is uploaded
       };
 
-      // Panggil service untuk update catalog
-      return await this.catalogService.update(+id, updateCatalogDto);
+      const numericId = parseInt(id, 10);
+      return await this.catalogService.updateCatalog(
+        numericId,
+        updateCatalogDto,
+      );
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to update catalog entry',
@@ -128,12 +142,13 @@ export class CatalogController {
       );
     }
   }
+
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<Catalog> {
     return this.catalogService.remove(+id);
   }
-  // Fetch catalog by slug
-  @Get(':imgpath')
+
+  @Get('images/:imgpath')
   seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
     const filePath = join(process.cwd(), 'uploads', 'catalog_images', image);
     res.sendFile(filePath, (err) => {
@@ -142,38 +157,23 @@ export class CatalogController {
       }
     });
   }
-  @Get(':category/:slug') // Change this line
-  async findByCategoryAndSlug(
-    @Param('category') category: string,
-    @Param('slug') slug: string,
-  ): Promise<Catalog> {
-    const catalog = await this.catalogService.findByCategoryAndSlug(
-      category,
-      slug,
+
+  @Get(':categorySlug/:productSlug')
+  async getCatalogItem(
+    @Param('categorySlug') categorySlug: string,
+    @Param('productSlug') productSlug: string,
+  ) {
+    console.log(`Fetching item for categorySlug: ${categorySlug}, productSlug: ${productSlug}`);
+    
+    const catalogItem = await this.catalogService.findBySlug(
+      categorySlug,
+      productSlug,
     );
-    if (!catalog) {
-      throw new HttpException('Catalog entry not found', HttpStatus.NOT_FOUND);
+    
+    if (!catalogItem) {
+      throw new HttpException('Catalog item not found', HttpStatus.NOT_FOUND);
     }
-    return catalog;
+    
+    return catalogItem;
   }
-
-  // Serve uploaded image files
-  // Serve uploaded image files
-
-  // // Handle catalog purchase and update quantity
-  // @Post('purchase')
-  // async purchase(
-  //   @Body('userId') userId: number,
-  //   @Body('catalogId') catalogId: number,
-  //   @Body('quantity') quantity: number,
-  // ): Promise<void> {
-  //   try {
-  //     await this.catalogService.updateQuantity(catalogId, quantity);
-  //   } catch (error) {
-  //     throw new HttpException(
-  //       'Failed to process purchase',
-  //       HttpStatus.INTERNAL_SERVER_ERROR,
-  //     );
-  //   }
-  // }
 }
