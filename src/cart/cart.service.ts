@@ -1,84 +1,70 @@
-import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { Cart, Prisma } from '@prisma/client';
+import { CreateCartDto } from './dto/create-cart.dto';
 
 @Injectable()
 export class CartService {
   constructor(private prisma: PrismaService) {}
 
-  async addToCart(
-    userId: number,
-    catalogId: number,
-    quantity: number,
-  ): Promise<Cart> {
-    try {
-      const existingCartItem = await this.prisma.cart.findFirst({
-        where: {
-          userId,
-          catalogId,
-        },
-      });
-
-      if (existingCartItem) {
-        // Update existing cart item if it already exists
-        const updatedCartItem = await this.prisma.cart.update({
-          where: { id: existingCartItem.id },
-          data: {
-            quantity: existingCartItem.quantity + quantity,
-          },
-        });
-
-        return updatedCartItem;
-      } else {
-        // Create new cart item if it does not exist
-        const newCartItem = await this.prisma.cart.create({
-          data: {
-            userId,
-            catalogId,
-            quantity,
-          },
-        });
-
-        return newCartItem;
-      }
-    } catch (error) {
-      throw new HttpException(
-        'Failed to add item to cart',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+  async addToCart(userId: number, catalogId: number, sizeId: number, quantity: number) {
+    // Check if the product and size exist
+    const catalog = await this.prisma.catalog.findUnique({
+      where: { id: catalogId },
+      include: { sizes: true },
+    });
+    
+    if (!catalog) {
+      throw new NotFoundException('Product not found');
     }
-  }
-  async create(
-    userId: number,
-    catalogId: number,
-    quantity: number,
-  ): Promise<Cart> {
-    try {
-      return await this.prisma.cart.create({
+    
+    const size = await this.prisma.size.findUnique({
+      where: { id: sizeId },
+    });
+
+    if (!size) {
+      throw new NotFoundException('Size not found');
+    }
+
+    // Check if the cart already contains this product and size for the user
+    const existingCartItem = await this.prisma.cart.findFirst({
+      where: {
+        userId,
+        catalogId,
+        sizeId,
+      },
+    });
+
+    if (existingCartItem) {
+      // If the item exists in the cart, just update the quantity
+      return await this.prisma.cart.update({
+        where: { id: existingCartItem.id },
         data: {
-          userId,
-          catalogId,
-          quantity,
+          quantity: existingCartItem.quantity + quantity, // Increment the quantity
         },
       });
-    } catch (error) {
-      throw new HttpException(
-        'Failed to create cart item',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
     }
-  }
 
-  async findAll(): Promise<Cart[]> {
-    try {
-      return await this.prisma.cart.findMany();
-    } catch (error) {
-      throw new HttpException(
-        'Failed to fetch cart items',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    // If the item is not in the cart, create a new cart item
+    return await this.prisma.cart.create({
+      data: {
+        userId,
+        catalogId,
+        sizeId,
+        quantity,
+      },
+    });
   }
+  async getCart(userId: number) {
+    return await this.prisma.cart.findMany({
+      where: { userId },
+      include: {
+        catalog: true, // Include product details
+        size: true,    // Include size details
+      },
+    });
+  }
+  
 
   async findOne(id: number): Promise<Cart | null> {
     try {
@@ -90,30 +76,46 @@ export class CartService {
     }
   }
 
-  async update(id: number, data: Prisma.CartUpdateInput): Promise<Cart> {
-    try {
-      return await this.prisma.cart.update({
-        where: { id },
-        data,
-      });
-    } catch (error) {
-      throw new HttpException(
-        'Failed to update cart item',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+  async updateCartItem(userId: number, cartId: number, quantity: number) {
+    const cartItem = await this.prisma.cart.findUnique({
+      where: { id: cartId },
+    });
+  
+    if (!cartItem) {
+      throw new NotFoundException('Cart item not found');
     }
+  
+    // Make sure the cart item belongs to the user
+    if (cartItem.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this cart item');
+    }
+  
+    // Update the quantity
+    return await this.prisma.cart.update({
+      where: { id: cartId },
+      data: { quantity },
+    });
   }
+  
 
-  async remove(id: number): Promise<void> {
-    try {
-      await this.prisma.cart.delete({
-        where: { id },
-      });
-    } catch (error) {
-      throw new HttpException(
-        'Failed to delete cart item',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+  async removeCartItem(userId: number, cartId: number) {
+    const cartItem = await this.prisma.cart.findUnique({
+      where: { id: cartId },
+    });
+  
+    if (!cartItem) {
+      throw new NotFoundException('Cart item not found');
     }
+  
+    // Make sure the cart item belongs to the user
+    if (cartItem.userId !== userId) {
+      throw new ForbiddenException('You do not have access to this cart item');
+    }
+  
+    // Delete the cart item
+    return await this.prisma.cart.delete({
+      where: { id: cartId },
+    });
   }
+  
 }

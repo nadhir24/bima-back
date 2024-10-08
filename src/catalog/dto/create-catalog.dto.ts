@@ -23,6 +23,9 @@ export class CreateCatalogDto {
   @IsString()
   category: string;
 
+  @IsString()
+  description: string;
+  
   @IsNumber()
   qty: number;
 

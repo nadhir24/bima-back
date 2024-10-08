@@ -1,5 +1,5 @@
 import { HttpException, HttpStatus, Injectable } from '@nestjs/common';
-import { Catalog } from '@prisma/client';
+import { Catalog, Prisma } from '@prisma/client';
 import { PrismaService } from 'prisma/prisma.service';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
 import slugify from 'slugify';
@@ -30,11 +30,13 @@ export class CatalogService {
     categorySlug: string,
     productSlug: string,
   ): Promise<Catalog> {
-    console.log(`Querying database with categorySlug: ${categorySlug}, productSlug: ${productSlug}`);
-    
+    console.log(
+      `Querying database with categorySlug: ${categorySlug}, productSlug: ${productSlug}`,
+    );
+
     return await this.prisma.catalog.findFirst({
       where: {
-        productSlug: productSlug, 
+        productSlug: productSlug,
         categorySlug: categorySlug,
       },
       include: { sizes: true },
@@ -111,6 +113,7 @@ export class CatalogService {
         productSlug: productSlug, // Ensure this is provided
         categorySlug: categorySlug, // Optional field
         sizes: { create: formattedSizes }, // Create sizes relation
+        description: createCatalogDto.description,
       },
       include: { sizes: true }, // Include sizes in the response
     });
@@ -122,39 +125,53 @@ export class CatalogService {
     id: number,
     updateCatalogDto: UpdateCatalogDto,
   ): Promise<Catalog> {
-    // Verifikasi bahwa katalog ada
+    // Verify that the catalog exists
     const existingCatalog = await this.prisma.catalog.findUnique({
       where: { id },
+      include: { sizes: true },
     });
+  
     if (!existingCatalog) {
       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
-
-    // Format ukuran
-    const formattedSizes = updateCatalogDto.sizes.map((size) => ({
-      size: size.size,
-      price: this.formatPrice(size.price), // Pastikan harga diformat sebagai string
-    }));
-
-    // Lakukan pembaruan
+  
+    // Prepare the update data
+    const updateData: Prisma.CatalogUpdateInput = {
+      name: updateCatalogDto.name ?? existingCatalog.name,
+      category: updateCatalogDto.category ?? existingCatalog.category,
+      isEnabled: updateCatalogDto.isEnabled ?? existingCatalog.isEnabled,
+      image: updateCatalogDto.image ?? existingCatalog.image,
+      description: updateCatalogDto.description ?? existingCatalog.description,
+      // Only include qty if it's explicitly provided
+      ...(updateCatalogDto.qty !== undefined && { qty: updateCatalogDto.qty }),
+    };
+  
+    // Handle sizes update
+    if (
+      updateCatalogDto.sizes &&
+      Array.isArray(updateCatalogDto.sizes) &&
+      updateCatalogDto.sizes.length > 0
+    ) {
+      updateData.sizes = {
+        deleteMany: { catalogId: id },
+        create: updateCatalogDto.sizes.map((size) => ({
+          size: size.size,
+          price: this.formatPrice(size.price),
+        })),
+      };
+    }
+  
+    // Perform the update
     const updatedCatalog = await this.prisma.catalog.update({
       where: { id },
-      data: {
-        name: updateCatalogDto.name,
-        category: updateCatalogDto.category,
-        qty: updateCatalogDto.qty,
-        isEnabled: updateCatalogDto.isEnabled,
-        image: updateCatalogDto.image,
-        sizes: {
-          deleteMany: { catalogId: id }, // Menghapus semua ukuran terkait
-          create: formattedSizes, // Membuat ukuran baru
-        },
-      },
-      include: { sizes: true }, // Sertakan ukuran dalam hasil
+      data: updateData,
+      include: { sizes: true },
     });
-
+  
     return updatedCatalog;
   }
+  
+  
 
   async remove(id: number): Promise<Catalog> {
     const existingCatalog = await this.prisma.catalog.findUnique({

@@ -72,6 +72,7 @@ export class CatalogController {
         qty: parseInt(formData.qty, 10),
         isEnabled,
         image: finalImageUrl,
+        description: formData.description,
       };
 
       return await this.catalogService.createCatalog(createCatalogDto);
@@ -116,25 +117,24 @@ export class CatalogController {
     try {
       const finalImageUrl = image ? `/catalog/images/${image.filename}` : null;
       const isEnabled = formData.isEnabled === 'true';
-
-      // Prepare the update DTO similar to the createCatalog method
+  
+      // Prepare the update DTO
       const updateCatalogDto: UpdateCatalogDto = {
         name: formData.name,
         category: formData.category,
-        sizes: formData.sizes.map((sizeData: any) => ({
-          size: sizeData.size,
-          price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')),
-        })),
-        qty: parseInt(formData.qty, 10),
-        isEnabled,
+        description: formData.description, // Corrected from formData.category to formData.description
+        sizes: Array.isArray(formData.sizes) ? 
+          formData.sizes.map((sizeData: any) => ({
+            size: sizeData.size,
+            price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')), // Handle price parsing safely
+          })) : [], // Fallback to an empty array if sizes is undefined
+          qty: formData.qty !== undefined ? parseInt(formData.qty, 10) : undefined,
+          isEnabled,
         image: finalImageUrl || formData.existingImage, // Fallback to existing image if no new image is uploaded
       };
-
+  
       const numericId = parseInt(id, 10);
-      return await this.catalogService.updateCatalog(
-        numericId,
-        updateCatalogDto,
-      );
+      return await this.catalogService.updateCatalog(numericId, updateCatalogDto);
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to update catalog entry',
@@ -142,6 +142,7 @@ export class CatalogController {
       );
     }
   }
+  
 
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<Catalog> {
@@ -163,17 +164,19 @@ export class CatalogController {
     @Param('categorySlug') categorySlug: string,
     @Param('productSlug') productSlug: string,
   ) {
-    console.log(`Fetching item for categorySlug: ${categorySlug}, productSlug: ${productSlug}`);
-    
+    console.log(
+      `Fetching item for categorySlug: ${categorySlug}, productSlug: ${productSlug}`,
+    );
+
     const catalogItem = await this.catalogService.findBySlug(
       categorySlug,
       productSlug,
     );
-    
+
     if (!catalogItem) {
       throw new HttpException('Catalog item not found', HttpStatus.NOT_FOUND);
     }
-    
+
     return catalogItem;
   }
 }

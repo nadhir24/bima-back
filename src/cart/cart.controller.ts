@@ -1,16 +1,17 @@
+// src/cart/cart.controller.ts
+
 import {
   Controller,
   Get,
   Post,
   Body,
+  Patch,
   Param,
-  Put,
   Delete,
-  HttpStatus,
-  HttpException,
 } from '@nestjs/common';
 import { CartService } from './cart.service';
-import { Cart as CartModel, Prisma } from '@prisma/client';
+import { CreateCartDto } from './dto/create-cart.dto';
+import { UpdateCartDto } from './dto/update-cart.dto';
 
 @Controller('cart')
 export class CartController {
@@ -20,55 +21,37 @@ export class CartController {
   async addToCart(
     @Body('userId') userId: number,
     @Body('catalogId') catalogId: number,
+    @Body('sizeId') sizeId: number,
     @Body('quantity') quantity: number,
-  ): Promise<any> {
-    try {
-      const result = await this.cartService.addToCart(
-        userId,
-        catalogId,
-        quantity,
-      );
-      return { message: 'Item added to cart successfully', cartItem: result };
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
-    }
+  ) {
+    return await this.cartService.addToCart(
+      userId,
+      catalogId,
+      sizeId,
+      quantity,
+    );
   }
-  @Get()
-  async findAll(): Promise<CartModel[]> {
-    try {
-      return await this.cartService.findAll();
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+  @Get(':userId')
+  async getCart(@Param('userId') userId: number) {
+    return await this.cartService.getCart(userId);
   }
 
-  @Get(':id')
-  async findOne(@Param('id') id: string): Promise<CartModel> {
-    try {
-      return await this.cartService.findOne(Number(id));
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.NOT_FOUND);
-    }
+
+
+  @Patch('update/:cartId')
+  async updateCartItem(
+    @Param('cartId') cartId: number,
+    @Body('userId') userId: number,
+    @Body('quantity') quantity: number,
+  ) {
+    return await this.cartService.updateCartItem(userId, cartId, quantity);
   }
 
-  @Put(':id')
-  async update(
-    @Param('id') id: string,
-    @Body() updateCartDto: Prisma.CartUpdateInput,
-  ): Promise<CartModel> {
-    try {
-      return await this.cartService.update(Number(id), updateCartDto);
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
-  }
-
-  @Delete(':id')
-  async remove(@Param('id') id: string): Promise<void> {
-    try {
-      await this.cartService.remove(Number(id));
-    } catch (error) {
-      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
-    }
+  @Delete('remove/:cartId')
+  async removeCartItem(
+    @Param('cartId') cartId: number,
+    @Body('userId') userId: number,
+  ) {
+    return await this.cartService.removeCartItem(userId, cartId);
   }
 }

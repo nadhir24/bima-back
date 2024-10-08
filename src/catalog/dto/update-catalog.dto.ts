@@ -1,6 +1,12 @@
 // src/catalog/dto/update-catalog.dto.ts
 
-import { IsArray, IsBoolean, IsOptional, IsString, IsInt } from 'class-validator';
+import {
+  IsArray,
+  IsBoolean,
+  IsOptional,
+  IsString,
+  IsInt,
+} from 'class-validator';
 
 export class UpdateCatalogDto {
   @IsOptional()
@@ -10,6 +16,10 @@ export class UpdateCatalogDto {
   @IsOptional()
   @IsString()
   category?: string;
+
+  @IsOptional()
+  @IsString()
+  description?: string;
 
   @IsOptional()
   @IsString()

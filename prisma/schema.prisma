@@ -30,6 +30,7 @@ model Catalog {
     slug        String  @unique
     category    String
     categorySlug String // Change back to non-nullable
+    description String
     qty         Int
     isEnabled   Boolean
     image       String?
@@ -38,15 +39,15 @@ model Catalog {
     productSlug String // Change back to non-nullable
 }
 
-
-
-
 model Size {
   id        Int     @id @default(autoincrement())
   size      String
-  price     String // Keep this as String for formatted prices
-  catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id]) // Add the relation to Catalog
+  price     String  // Keep this as String for formatted prices
+  catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id]) // Relation to Catalog
   catalogId Int
+
+  // Relation to Cart
+  carts     Cart[]  @relation("SizeCarts") // Relation to Cart
 }
 
 model Cart {
@@ -54,7 +55,12 @@ model Cart {
   userId    Int
   user      User     @relation(fields: [userId], references: [id])
   catalogId Int
-  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id]) // This line references CatalogCarts
+  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])
+  
+  // Link to Size model
+  sizeId    Int      
+  size      Size     @relation("SizeCarts", fields: [sizeId], references: [id]) // Ensure this matches the relation name in Size
+
   quantity  Int
   createdAt DateTime @default(now())
   paymentId Int?
@@ -62,6 +68,9 @@ model Cart {
 
   @@map("cart")
 }
+
+
+
 
 model Payment {
   id        Int      @id @default(autoincrement())
