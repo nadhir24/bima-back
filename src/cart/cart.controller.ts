@@ -1,57 +1,53 @@
-// src/cart/cart.controller.ts
-
-import {
-  Controller,
-  Get,
-  Post,
-  Body,
-  Patch,
-  Param,
-  Delete,
-} from '@nestjs/common';
+import { Controller, Post, Get, Put, Delete, Body, Param, ParseIntPipe, Request, UseGuards } from '@nestjs/common';
 import { CartService } from './cart.service';
-import { CreateCartDto } from './dto/create-cart.dto';
-import { UpdateCartDto } from './dto/update-cart.dto';
+import { CreateCartDto } from './dto/create-cart.dto'; // Ensure you create this DTO
 
 @Controller('cart')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
+  // Add item to cart
   @Post('add')
   async addToCart(
-    @Body('userId') userId: number,
-    @Body('catalogId') catalogId: number,
-    @Body('sizeId') sizeId: number,
-    @Body('quantity') quantity: number,
+    @Body('userId') userId: string,
+    @Body('catalogId') catalogId: string,
+    @Body('sizeId') sizeId: string,
+    @Body('quantity') quantity: string,
   ) {
     return await this.cartService.addToCart(
-      userId,
-      catalogId,
-      sizeId,
-      quantity,
+      Number(userId), // Convert userId to number
+      Number(catalogId), // Convert catalogId to number
+      Number(sizeId), // Convert sizeId to number
+      Number(quantity), // Convert quantity to number
     );
   }
-  @Get(':userId')
-  async getCart(@Param('userId') userId: number) {
+  
+
+  // Get user's cart
+  @Get()
+  async getCart(@Request() req) {
+    const userId = req.user.id; // Extract userId from request (assumes you are using JWT)
     return await this.cartService.getCart(userId);
   }
 
-
-
-  @Patch('update/:cartId')
+  // Update cart item quantity
+  @Put(':cartId')
   async updateCartItem(
-    @Param('cartId') cartId: number,
-    @Body('userId') userId: number,
-    @Body('quantity') quantity: number,
+    @Request() req,
+    @Param('cartId', ParseIntPipe) cartId: number,
+    @Body('quantity', ParseIntPipe) quantity: number,
   ) {
+    const userId = req.user.id; // Extract userId from request
     return await this.cartService.updateCartItem(userId, cartId, quantity);
   }
 
-  @Delete('remove/:cartId')
+  // Remove cart item
+  @Delete(':cartId')
   async removeCartItem(
-    @Param('cartId') cartId: number,
-    @Body('userId') userId: number,
+    @Request() req,
+    @Param('cartId', ParseIntPipe) cartId: number,
   ) {
+    const userId = req.user.id; // Extract userId from request
     return await this.cartService.removeCartItem(userId, cartId);
   }
 }

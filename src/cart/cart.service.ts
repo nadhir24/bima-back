@@ -1,4 +1,4 @@
-import { Injectable, HttpException, HttpStatus, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, HttpException, HttpStatus, ForbiddenException, NotFoundException, BadRequestException, InternalServerErrorException } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { Cart, Prisma } from '@prisma/client';
 import { CreateCartDto } from './dto/create-cart.dto';
@@ -8,53 +8,74 @@ export class CartService {
   constructor(private prisma: PrismaService) {}
 
   async addToCart(userId: number, catalogId: number, sizeId: number, quantity: number) {
-    // Check if the product and size exist
-    const catalog = await this.prisma.catalog.findUnique({
-      where: { id: catalogId },
-      include: { sizes: true },
-    });
-    
-    if (!catalog) {
-      throw new NotFoundException('Product not found');
-    }
-    
-    const size = await this.prisma.size.findUnique({
-      where: { id: sizeId },
-    });
-
-    if (!size) {
-      throw new NotFoundException('Size not found');
-    }
-
-    // Check if the cart already contains this product and size for the user
-    const existingCartItem = await this.prisma.cart.findFirst({
-      where: {
-        userId,
-        catalogId,
-        sizeId,
-      },
-    });
-
-    if (existingCartItem) {
-      // If the item exists in the cart, just update the quantity
-      return await this.prisma.cart.update({
-        where: { id: existingCartItem.id },
-        data: {
-          quantity: existingCartItem.quantity + quantity, // Increment the quantity
-        },
+    try {
+      // Check if the product exists
+      const catalogIdInt = Number(catalogId);
+      if (isNaN(catalogIdInt)) {
+        throw new BadRequestException('Invalid catalog ID');
+      }
+      const catalog = await this.prisma.catalog.findUnique({
+        where: { id: catalogId },
+        include: { sizes: true },
       });
+  
+      if (!catalog) {
+        throw new NotFoundException('Product not found');
+      }
+  
+      // Check if the size exists
+      const size = await this.prisma.size.findUnique({
+        where: { id: sizeId },
+      });
+  
+      if (!size) {
+        throw new NotFoundException('Size not found');
+      }
+  
+      // Check if the size is available for this catalog
+      const sizeAvailable = catalog.sizes.some(s => s.id === sizeId);
+      if (!sizeAvailable) {
+        throw new BadRequestException('This size is not available for the selected product');
+      }
+  
+      // Check stock availability
+      if (catalog.qty < quantity) {
+        throw new BadRequestException('Insufficient stock');
+      }
+  
+      // Check if the item is already in the cart
+      const existingCartItem = await this.prisma.cart.findFirst({
+        where: { userId, catalogId, sizeId },
+      });
+  
+      if (existingCartItem) {
+        // Update existing cart item
+        const newQuantity = existingCartItem.quantity + quantity;
+        if (catalog.qty < newQuantity) {
+          throw new BadRequestException('Insufficient stock for requested quantity');
+        }
+        return await this.prisma.cart.update({
+          where: { id: existingCartItem.id },
+          data: { quantity: newQuantity },
+        });
+      } else {
+        // Create new cart item
+        return await this.prisma.cart.create({
+          data: { userId, catalogId, sizeId, quantity },
+        });
+      }
+    } catch (error) {
+      if (error instanceof NotFoundException || error instanceof BadRequestException) {
+        throw error;
+      }
+      // Log the error and throw a generic error message
+      console.error('Error in addToCart:', error);
+      throw new InternalServerErrorException('An error occurred while processing your request');
     }
-
-    // If the item is not in the cart, create a new cart item
-    return await this.prisma.cart.create({
-      data: {
-        userId,
-        catalogId,
-        sizeId,
-        quantity,
-      },
-    });
   }
+  
+  
+  
   async getCart(userId: number) {
     return await this.prisma.cart.findMany({
       where: { userId },

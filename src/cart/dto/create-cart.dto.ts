@@ -1,18 +1,19 @@
-// src/cart/dto/create-cart.dto.ts
-
-import { IsInt, IsNotEmpty } from 'class-validator';
+import { IsNumber, IsNotEmpty } from "class-validator";
 
 export class CreateCartDto {
-  @IsInt()
+  @IsNumber()
+  @IsNotEmpty()
   userId: number;
 
-  @IsInt()
+  @IsNumber()
+  @IsNotEmpty()
   catalogId: number;
 
-  @IsInt()
-  sizeId: number; // Add sizeId here
+  @IsNumber()
+  @IsNotEmpty()
+  sizeId: number;
 
-  @IsInt()
+  @IsNumber()
   @IsNotEmpty()
   quantity: number;
 }

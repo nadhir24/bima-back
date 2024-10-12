@@ -1,3 +1,4 @@
+// Datasource and Generator
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -7,6 +8,7 @@ generator client {
   provider = "prisma-client-js"
 }
 
+// User Model
 model User {
   id           Int           @id @default(autoincrement())
   fullName     String
@@ -14,52 +16,57 @@ model User {
   email        String        @unique
   password     String
   createdAt    DateTime      @default(now())
-  carts        Cart[]
-  payments     Payment[]
+  carts        Cart[]        // Relation to Cart
+  payments     Payment[]     // Relation to Payment
   userProfile  UserProfile?
   userPassword UserPassword?
-  userRoles    UserRole[]
+  userRoles    UserRole[]    // Relation to UserRole
   photoProfile String?
 
   @@map("users")
 }
 
-model Catalog { 
-    id          Int     @id @default(autoincrement())
-    name        String
-    slug        String  @unique
-    category    String
-    categorySlug String // Change back to non-nullable
-    description String
-    qty         Int
-    isEnabled   Boolean
-    image       String?
-    sizes       Size[]  @relation("CatalogSizes") // Define the relation to Size
-    carts       Cart[]  @relation("CatalogCarts")
-    productSlug String // Change back to non-nullable
+// Catalog Model
+model Catalog {
+  id          Int     @id @default(autoincrement())
+  name        String
+  slug        String  @unique
+  category    String
+  categorySlug String // Non-nullable
+  description String
+  qty         Int
+  isEnabled   Boolean
+  image       String?
+  sizes       Size[]  @relation("CatalogSizes")  // One-to-many relationship with Size
+  carts       Cart[]  @relation("CatalogCarts")  // One-to-many relationship with Cart
+  productSlug String  // Non-nullable
+
+  @@map("catalogs")
 }
 
+// Size Model
 model Size {
-  id        Int     @id @default(autoincrement())
+  id        Int      @id @default(autoincrement())
   size      String
-  price     String  // Keep this as String for formatted prices
-  catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id]) // Relation to Catalog
+  price     String   // Stored as a String for formatted prices
+  catalog   Catalog  @relation("CatalogSizes", fields: [catalogId], references: [id])  // Foreign key to Catalog
   catalogId Int
 
   // Relation to Cart
-  carts     Cart[]  @relation("SizeCarts") // Relation to Cart
+  carts     Cart[]   @relation("SizeCarts")  // One-to-many relationship with Cart
 }
 
+// Cart Model
 model Cart {
   id        Int      @id @default(autoincrement())
   userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])  // Foreign key to User
   catalogId Int
-  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])
+  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])  // Foreign key to Catalog
   
-  // Link to Size model
-  sizeId    Int      
-  size      Size     @relation("SizeCarts", fields: [sizeId], references: [id]) // Ensure this matches the relation name in Size
+  // Foreign key to Size
+  sizeId    Int
+  size      Size     @relation("SizeCarts", fields: [sizeId], references: [id])
 
   quantity  Int
   createdAt DateTime @default(now())
@@ -69,20 +76,19 @@ model Cart {
   @@map("cart")
 }
 
-
-
-
+// Payment Model
 model Payment {
   id        Int      @id @default(autoincrement())
   userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  user      User     @relation(fields: [userId], references: [id])  // Foreign key to User
   amount    Float
   status    String
   createdAt DateTime @default(now())
-  carts     Cart[]
+  carts     Cart[]   // One-to-many relationship with Cart
 
   @@map("payment")
 }
+
 
 model UserProfile {
   id        Int      @id @default(autoincrement()) @map("uspro_id")
@@ -112,7 +118,6 @@ model Address {
 model Role {
   id   Int     @id @default(autoincrement()) @map("role_id")
   name String? @map("role_name")
-
   userRoles UserRole[]
 
   @@index([id], name: "pkey_roles")
@@ -122,9 +127,8 @@ model Role {
 model UserRole {
   userId Int
   roleId Int
-
-  user User @relation(fields: [userId], references: [id])
-  role Role @relation(fields: [roleId], references: [id])
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
 
   @@id([userId, roleId])
   @@map("user_roles")
