@@ -1,43 +1,26 @@
-import {
-  HttpStatus,
-  Injectable,
-  NestMiddleware,
-  UnauthorizedException,
-} from '@nestjs/common';
-import { verify } from 'jsonwebtoken';
-import { PrismaService } from 'prisma/prisma.service'; // Update this path according to your project structure
+import { Injectable, NestMiddleware } from '@nestjs/common';
+import { JwtService } from '@nestjs/jwt';
+import { Request, Response, NextFunction } from 'express';
 
 @Injectable()
 export class JwtMiddleware implements NestMiddleware {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(private readonly jwtService: JwtService) {}
 
-  async use(req: any, res: any, next: () => void) {
+  use(req: Request, res: Response, next: NextFunction) {
+    const token = req.headers.authorization?.split(' ')[1]; // Mengambil token dari header Authorization
+
+    if (!token) {
+      return res.status(401).json({ message: 'Unauthorized' });
+    }
+
     try {
-      const jwtKey = req.headers.authorization;
-
-      if (!jwtKey) {
-        throw new UnauthorizedException('Not Authorized');
-      }
-
-      const token: any = verify(jwtKey, process.env.SECRET_KEY);
-
-      const user = await this.prisma.user.findUnique({
-        where: { id: token.user_id },
+      const decoded = this.jwtService.verify(token, {
+        secret: process.env.SECRET_KEY, // Secret key untuk memverifikasi JWT
       });
-
-      if (!user) {
-        res.status(HttpStatus.BAD_REQUEST).send({
-          statusCode: HttpStatus.BAD_REQUEST,
-          message: 'You must login first',
-        });
-      } else {
-        next();
-      }
-    } catch (e) {
-      res.status(HttpStatus.UNAUTHORIZED).send({ 
-        statusCode: HttpStatus.UNAUTHORIZED,
-        message: 'Unauthorized',
-      });
+      req.user = decoded; // Menambahkan decoded token ke request untuk digunakan di controller
+      next(); // Melanjutkan ke rute selanjutnya
+    } catch (error) {
+      return res.status(401).json({ message: 'Invalid or expired token' });
     }
   }
 }

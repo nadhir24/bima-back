@@ -20,10 +20,20 @@ import { diskStorage } from 'multer';
 import { Request } from 'express';
 import { existsSync, unlink } from 'fs';
 import { UpdateUserDto } from './dto/UpdateUser.dto';
+import { CreateUserDto } from './dto/createUser.dto';
 
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
+
+  @Get()
+  async getAllUsers() {
+    return await this.usersService.getUsers();
+  }
+  @Post('create')
+async createUser(@Body() createUserDto: CreateUserDto) {
+  return this.usersService.signUp(createUserDto);
+}
 
   @Put('update/:id')
   @UseInterceptors(

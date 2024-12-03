@@ -21,11 +21,14 @@ export class CreateCatalogDto {
   name: string;
 
   @IsString()
+  blurDataURL?: string; // Add this line
+
+  @IsString()
   category: string;
 
   @IsString()
   description: string;
-  
+
   @IsNumber()
   qty: number;
 

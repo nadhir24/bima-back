@@ -2,7 +2,6 @@ import { Injectable, UnauthorizedException, HttpStatus } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
 import { LoginDto } from './dto/login.dto';
-
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from 'prisma/prisma.service';
 import { sign } from 'jsonwebtoken';
@@ -15,7 +14,8 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
   
-  async loginUser(loginDto: LoginDto) {
+  // Menggunakan satu metode login saja
+  async login(loginDto: LoginDto) {
     try {
       const user = await this.prisma.user.findUnique({
         where: { email: loginDto.email },
@@ -41,7 +41,7 @@ export class AuthService {
         photoProfile: user.photoProfile,
       };
   
-      const token = sign(
+      const token = this.jwtService.sign(
         {
           id: user.id,
           fullName: user.fullName,
@@ -50,7 +50,7 @@ export class AuthService {
           roleId: user.userRoles,
           photoProfile: user.photoProfile,
         },
-        process.env.SECRET_KEY,
+        { secret: process.env.SECRET_KEY, expiresIn: '1h' }, // Expire token 1 jam
       );
   
       return { statusCode: HttpStatus.OK, token: token, loginData: loginData };
@@ -59,6 +59,7 @@ export class AuthService {
     }
   }
   
+  // Validasi user untuk autentikasi JWT
   async validateUser(email: string, pass: string): Promise<any> {
     const user = await this.prisma.user.findUnique({
       where: { email },
@@ -70,17 +71,5 @@ export class AuthService {
       return { ...user, ...result };
     }
     return null;
-  }
-
-  async login(loginDto: LoginDto) {
-    const user = await this.validateUser(loginDto.email, loginDto.password);
-    if (!user) {
-      throw new UnauthorizedException('Invalid credentials');
-    }
-  
-    const payload = { email: user.email, sub: user.id };
-    return {
-      access_token: this.jwtService.sign(payload),
-    };
   }
 }

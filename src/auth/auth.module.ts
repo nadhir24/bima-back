@@ -1,28 +1,26 @@
-// src/auth/auth.module.ts
 import { Module } from '@nestjs/common';
-import { AuthService } from './auth/auth.service';
-import { AuthController } from './auth/auth.controller';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
+
+import { JwtStrategy } from './jwt.strategy';  // Import strategy JWT
+import { AuthService } from './auth/auth.service';
+import { AuthController } from './auth/auth.controller';
 import { UsersModule } from 'src/users/users.module';
-import { ConfigModule, ConfigService } from '@nestjs/config';
 
 @Module({
   imports: [
-    UsersModule,
     PassportModule,
-    JwtModule.registerAsync({
-      imports: [ConfigModule],
-      useFactory: async (configService: ConfigService) => ({
-        secret: process.env.JWT_SECRET_KEY,
-        signOptions: { expiresIn: '60m' },
-      }),
-      inject: [ConfigService],
+    JwtModule.register({
+      secret: process.env.JWT_SECRET_KEY,
+      signOptions: { expiresIn: '1h' },  // Token expired dalam 1 jam
     }),
-    UsersModule, // Pastikan UsersModule diimpor
+    UsersModule, // Jangan lupa mengimpor UsersModule di sini
 
   ],
-  providers: [AuthService],
+  providers: [AuthService, JwtStrategy],
   controllers: [AuthController],
 })
 export class AuthModule {}
+
+
+
