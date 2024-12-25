@@ -1,53 +1,127 @@
-import { Controller, Post, Get, Put, Delete, Body, Param, ParseIntPipe, Request, UseGuards } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Get,
+  Put,
+  Delete,
+  Body,
+  Param,
+  ParseIntPipe,
+  Request,
+  Query,
+  UseGuards,
+  Req,
+  Res,
+} from '@nestjs/common';
 import { CartService } from './cart.service';
-import { CreateCartDto } from './dto/create-cart.dto'; // Ensure you create this DTO
+import { AuthGuard } from '@nestjs/passport';
+import { v4 as uuidv4 } from 'uuid';
+import { Response } from 'express';
 
 @Controller('cart')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
-  // Add item to cart
+  // Menambahkan item ke keranjang
   @Post('add')
   async addToCart(
-    @Body('userId') userId: string,
-    @Body('catalogId') catalogId: string,
-    @Body('sizeId') sizeId: string,
-    @Body('quantity') quantity: string,
+    @Body('userId') userId: number | null,
+    @Body('catalogId') catalogId: number,
+    @Body('sizeId') sizeId: number,
+    @Body('quantity') quantity: number,
+    @Req() req: Request, // Mengakses session
   ) {
+    let guestId = req.session.guestId;
+
+    if (!guestId) {
+      guestId = uuidv4();
+      req.session.guestId = guestId; // Menyimpan guestId baru ke session
+    }
+
     return await this.cartService.addToCart(
-      Number(userId), // Convert userId to number
-      Number(catalogId), // Convert catalogId to number
-      Number(sizeId), // Convert sizeId to number
-      Number(quantity), // Convert quantity to number
+      userId,
+      guestId,
+      catalogId,
+      sizeId,
+      quantity,
     );
   }
-  
 
-  // Get user's cart
-  @Get()
-  async getCart(@Request() req) {
-    const userId = req.user.id; // Extract userId from request (assumes you are using JWT)
-    return await this.cartService.getCart(userId);
+  @UseGuards(AuthGuard('jwt')) // Gunakan JWT untuk memastikan user login
+  @Post('sync')
+  async syncCart(
+    @Req() req, // Ambil user dari token
+    @Body('cart')
+    guestCart: Array<{
+      catalogId: number;
+      sizeId: number;
+      quantity: number;
+    }>, // Struktur cart dari frontend
+  ) {
+    const userId = req.user.id; // Dapatkan userId dari token JWT
+
+    if (!guestCart || guestCart.length === 0) {
+      return { message: 'No cart data to sync' };
+    }
+
+    return await this.cartService.syncCart(userId, guestCart);
+  }
+  @Get('guest-session')
+  getGuestSession(@Req() req: Request, @Res() res: Response) {
+    let guestId = req.session.guestId;
+
+    if (!guestId) {
+      guestId = uuidv4();
+      req.session.guestId = guestId; // Save guestId to session
+    }
+
+    res.send({ guestId });
   }
 
-  // Update cart item quantity
+  // Mendapatkan data cart, menggunakan session untuk guestId
+  @Get('findAll')
+  async getCart(
+    @Query('userId') userId: number | null,
+    @Query('guestId') guestId: string | null,
+    @Req() req: Request,
+  ) {
+    // Jika guestId tidak ada, gunakan session untuk mengambil guestId
+    if (!guestId) {
+      guestId = req.session.guestId;
+    }
+
+    // Periksa apakah guestId masih tidak ada, jika ya, buat guestId baru
+    if (!guestId) {
+      guestId = uuidv4(); // UUID baru dibuat
+      req.session.guestId = guestId; // Menyimpan guestId ke session
+    }
+
+    return await this.cartService.getCart(userId, guestId);
+  }
+
+  // Memperbarui jumlah item di keranjang
   @Put(':cartId')
   async updateCartItem(
-    @Request() req,
     @Param('cartId', ParseIntPipe) cartId: number,
     @Body('quantity', ParseIntPipe) quantity: number,
+    @Body('userId') userId: number | null,
+    @Body('guestId') guestId: string | null,
   ) {
-    const userId = req.user.id; // Extract userId from request
-    return await this.cartService.updateCartItem(userId, cartId, quantity);
+    return await this.cartService.updateCartItem(
+      userId,
+      guestId,
+      cartId,
+      quantity,
+    );
   }
 
-  // Remove cart item
+  // Menghapus item dari keranjang
   @Delete(':cartId')
   async removeCartItem(
-    @Request() req,
     @Param('cartId', ParseIntPipe) cartId: number,
+    @Body('userId') userId: number | null,
+    @Body('guestId') guestId: string | null,
   ) {
-    const userId = req.user.id; // Extract userId from request
-    return await this.cartService.removeCartItem(userId, cartId);
+    return await this.cartService.removeCartItem(userId, guestId, cartId);
   }
 }

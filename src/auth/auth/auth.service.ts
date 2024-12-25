@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException, HttpStatus } from '@nestjs/common';
+import { Injectable, UnauthorizedException, HttpStatus, HttpException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { UsersService } from 'src/users/users.service';
 import { LoginDto } from './dto/login.dto';
@@ -17,6 +17,18 @@ export class AuthService {
   // Menggunakan satu metode login saja
   async login(loginDto: LoginDto) {
     try {
+        // Cek apakah nomor telepon sudah terdaftar
+  // const existingnumber = await this.prisma.user.findUnique({
+  //   where: { phoneNumber: loginDto.phoneNumber },
+  // });
+
+  // if (existingUser) {
+  //   throw new HttpException(
+  //     'Phone number already in use',
+  //     HttpStatus.BAD_REQUEST,
+  //   );
+  // }
+
       const user = await this.prisma.user.findUnique({
         where: { email: loginDto.email },
         include: { userPassword: true, userRoles: true },
@@ -61,15 +73,30 @@ export class AuthService {
   
   // Validasi user untuk autentikasi JWT
   async validateUser(email: string, pass: string): Promise<any> {
+    // Validasi email dan password tidak kosong
+    if (!email || !pass) {
+      throw new UnauthorizedException('Email and password are required');
+    }
+  
+    // Cari user berdasarkan email
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: { userPassword: true },
     });
   
-    if (user && await bcrypt.compare(pass, user.userPassword.passwordHash)) {
-      const { passwordHash, ...result } = user.userPassword;
-      return { ...user, ...result };
+    if (!user) {
+      throw new UnauthorizedException('User not found');
     }
-    return null;
+  
+    // Cek apakah password cocok
+    const isPasswordValid = await bcrypt.compare(pass, user.userPassword.passwordHash);
+    if (!isPasswordValid) {
+      throw new UnauthorizedException('Invalid password');
+    }
+  
+    // Hapus password hash dari hasil yang dikembalikan
+    const { passwordHash, ...result } = user.userPassword;
+    return { ...user, ...result };
   }
+  
 }

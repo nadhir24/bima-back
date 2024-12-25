@@ -12,7 +12,7 @@ generator client {
 model User {
   id           Int           @id @default(autoincrement())
   fullName     String
-  phoneNumber  String
+  phoneNumber  String        @unique
   email        String        @unique
   password     String
   createdAt    DateTime      @default(now())
@@ -59,15 +59,13 @@ model Size {
 // Cart Model
 model Cart {
   id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])  // Foreign key to User
+  userId    Int?
+  user      User?    @relation(fields: [userId], references: [id])  // Relasi opsional
+  guestId   String?  // ID sementara untuk guest user
   catalogId Int
-  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])  // Foreign key to Catalog
-  
-  // Foreign key to Size
+  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])
   sizeId    Int
   size      Size     @relation("SizeCarts", fields: [sizeId], references: [id])
-
   quantity  Int
   createdAt DateTime @default(now())
   paymentId Int?
@@ -75,6 +73,7 @@ model Cart {
 
   @@map("cart")
 }
+
 
 // Payment Model
 model Payment {

@@ -13,6 +13,7 @@ import {
   FileTypeValidator,
   MaxFileSizeValidator,
   HttpException,
+  Delete,
 } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { FileInterceptor } from '@nestjs/platform-express';
@@ -31,9 +32,9 @@ export class UsersController {
     return await this.usersService.getUsers();
   }
   @Post('create')
-async createUser(@Body() createUserDto: CreateUserDto) {
-  return this.usersService.signUp(createUserDto);
-}
+  async createUser(@Body() createUserDto: CreateUserDto) {
+    return this.usersService.signUp(createUserDto);
+  }
 
   @Put('update/:id')
   @UseInterceptors(
@@ -97,5 +98,9 @@ async createUser(@Body() createUserDto: CreateUserDto) {
       statusCode: HttpStatus.OK,
       message: 'User updated successfully',
     };
+  }
+  @Delete('delete/:id')
+  async deleteUser(@Param('id') id: string) {
+    return await this.usersService.deleteUser(+id);
   }
 }

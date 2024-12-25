@@ -15,13 +15,29 @@ export class UsersService {
       },
     });
   }
-  
+
   async getUserById(id: number) {
     return this.prisma.user.findUnique({
       where: { id },
     });
   }
   async signUp(createUserDto: CreateUserDto) {
+    const existingUser = await this.prisma.user.findUnique({
+      where: { phoneNumber: createUserDto.phoneNumber },
+    });
+
+    if (existingUser) {
+      throw new HttpException(
+        'Phone number already in use',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+    const existingemail = await this.prisma.user.findUnique({
+      where: { email: createUserDto.email },
+    });
+    if (existingemail) {
+      throw new HttpException('email already in use', HttpStatus.BAD_REQUEST);
+    }
     const salt = await bcrypt.genSalt(10);
     const passHash = await bcrypt.hash(createUserDto.password, salt);
 
@@ -99,6 +115,40 @@ export class UsersService {
       };
     } catch (error) {
       throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
+    }
+  }
+  async deleteUser(id: number) {
+    const user = await this.prisma.user.findUnique({
+      where: { id },
+    });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    try {
+      // Hapus relasi dari tabel userPassword
+      await this.prisma.userPassword.deleteMany({
+        where: { userId: id },
+      });
+
+      // Hapus relasi dari tabel userRoles
+      await this.prisma.userRole.deleteMany({
+        where: { userId: id },
+      });
+
+      // Hapus user
+      await this.prisma.user.delete({
+        where: { id },
+      });
+
+      return {
+        statusCode: HttpStatus.OK,
+        message: 'User deleted successfully',
+      };
+    } catch (error) {
+      console.error('Error deleting user:', error.message);
+      throw new HttpException('Failed to delete user', HttpStatus.BAD_REQUEST);
     }
   }
 }
