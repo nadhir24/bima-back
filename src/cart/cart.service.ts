@@ -1,15 +1,12 @@
 import {
   Injectable,
-  HttpException,
-  HttpStatus,
-  ForbiddenException,
-  NotFoundException,
   BadRequestException,
+  NotFoundException,
+  ForbiddenException,
   InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { Cart, Prisma } from '@prisma/client';
-import { v4 as uuidv4 } from 'uuid';
 
 @Injectable()
 export class CartService {
@@ -17,26 +14,14 @@ export class CartService {
 
   // Helper untuk validasi user atau guest
   private validateUserOrGuest(userId: number | null, guestId: string | null) {
-    console.log('validateUserOrGuest called with:', userId, guestId);
     if (!userId && !guestId) {
       throw new BadRequestException('Either userId or guestId must be provided.');
     }
     return userId ?? guestId;
   }
-  
 
-  
-
+  // Mendapatkan data cart
   async getCart(userId: number | null, guestId: string | null) {
-    // Jika guestId tidak ada, periksa session
-    if (!guestId) {
-      guestId = userId ? userId.toString() : null;
-    }
-
-    if (!guestId) {
-      throw new Error('Either userId or guestId must be provided.');
-    }
-
     return await this.prisma.cart.findMany({
       where: {
         ...(userId ? { userId } : { guestId }),
@@ -48,13 +33,14 @@ export class CartService {
     });
   }
 
-  // Method untuk menambah cart
-  async addToCart(userId: number | null, guestId: string | null, catalogId: number, sizeId: number, quantity: number) {
-    // Kalau tidak ada guestId, generate baru dan simpan di session
-    if (!guestId) {
-      guestId = uuidv4();
-    }
-
+  // Menambahkan item ke keranjang
+  async addToCart(
+    userId: number | null,
+    guestId: string | null,
+    catalogId: number,
+    sizeId: number,
+    quantity: number,
+  ) {
     const existingCartItem = await this.prisma.cart.findFirst({
       where: {
         ...(userId ? { userId } : { guestId }),
@@ -79,17 +65,6 @@ export class CartService {
           quantity,
         },
       });
-    }
-  }
-
-  // Menemukan item keranjang tertentu
-  async findOne(cartId: number): Promise<Cart | null> {
-    try {
-      return await this.prisma.cart.findUnique({
-        where: { id: cartId },
-      });
-    } catch (error) {
-      throw new NotFoundException('Cart item not found');
     }
   }
 

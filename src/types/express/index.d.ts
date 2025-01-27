@@ -1,10 +1,15 @@
-// src/types/express/index.d.ts
-import * as express from 'express';
+import 'express-session';
+
+declare module 'express-session' {
+  interface SessionData {
+    guestId?: string;
+  }
+}
 
 declare global {
   namespace Express {
     interface Request {
-      session: any; // This will allow access to the session property
+      sessionID: string; // Deklarasi sessionID di Request
     }
   }
 }
