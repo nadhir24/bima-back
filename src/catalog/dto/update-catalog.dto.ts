@@ -48,6 +48,5 @@ export class UpdateCatalogDto {
     price: string; // Ensure this matches your price format
   }[];
 
-  blurDataURL?: string;  // Add this line
-
+  blurDataURL?: string; // Add this line
 }

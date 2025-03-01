@@ -3,37 +3,18 @@ import {
   BadRequestException,
   NotFoundException,
   ForbiddenException,
-  InternalServerErrorException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
-import { Cart, Prisma } from '@prisma/client';
+import { Prisma } from '@prisma/client';
 
 @Injectable()
 export class CartService {
   constructor(private prisma: PrismaService) {}
 
-  // Helper untuk validasi user atau guest
-  private validateUserOrGuest(userId: number | null, guestId: string | null) {
-    if (!userId && !guestId) {
-      throw new BadRequestException('Either userId or guestId must be provided.');
-    }
-    return userId ?? guestId;
+  async findManyCarts(params: Prisma.CartFindManyArgs): Promise<any> {
+    return this.prisma.cart.findMany(params);
   }
 
-  // Mendapatkan data cart
-  async getCart(userId: number | null, guestId: string | null) {
-    return await this.prisma.cart.findMany({
-      where: {
-        ...(userId ? { userId } : { guestId }),
-      },
-      include: {
-        catalog: true,
-        size: true,
-      },
-    });
-  }
-
-  // Menambahkan item ke keranjang
   async addToCart(
     userId: number | null,
     guestId: string | null,
@@ -41,152 +22,136 @@ export class CartService {
     sizeId: number,
     quantity: number,
   ) {
-    const existingCartItem = await this.prisma.cart.findFirst({
-      where: {
-        ...(userId ? { userId } : { guestId }),
-        catalogId,
-        sizeId,
-      },
-    });
+    return this.prisma.$transaction(async (prisma) => {
+      const catalog = await prisma.catalog.findUniqueOrThrow({
+        where: { id: catalogId },
+      });
+      if (catalog.qty < quantity) {
+        throw new BadRequestException(
+          `Insufficient stock for ${catalog.name}. Available: ${catalog.qty}`,
+        );
+      }
+      await prisma.size.findUniqueOrThrow({ where: { id: sizeId } });
 
-    if (existingCartItem) {
-      const newQuantity = existingCartItem.quantity + quantity;
-      return await this.prisma.cart.update({
-        where: { id: existingCartItem.id },
-        data: { quantity: newQuantity },
+      const cartItem = await prisma.cart.create({
+        data: { quantity, userId, guestId, catalogId, sizeId },
       });
-    } else {
-      return await this.prisma.cart.create({
-        data: {
-          userId,
-          guestId,
-          catalogId,
-          sizeId,
-          quantity,
-        },
+
+      await prisma.catalog.update({
+        where: { id: catalogId },
+        data: { qty: { decrement: quantity } },
       });
-    }
+      return cartItem;
+    });
   }
 
-  // Memperbarui jumlah item di keranjang
+  async findUniqueCart(params: Prisma.CartFindUniqueArgs): Promise<any> {
+    return this.prisma.cart.findUnique(params);
+  }
+
+  async findFirstCart(params: Prisma.CartFindFirstArgs): Promise<any> {
+    return this.prisma.cart.findFirst(params);
+  }
   async updateCartItem(
     userId: number | null,
     guestId: string | null,
     cartId: number,
     quantity: number,
   ) {
-    const userOrGuest = this.validateUserOrGuest(userId, guestId);
+    return this.prisma.$transaction(async (prisma) => {
+      if (quantity <= 0) return this.removeCartItem(userId, guestId, cartId);
 
-    const cartItem = await this.prisma.cart.findUnique({
-      where: { id: cartId },
-    });
-    if (!cartItem) throw new NotFoundException('Cart item not found');
+      const cartItem = await prisma.cart.findUniqueOrThrow({
+        where: { id: cartId },
+        include: { catalog: true },
+      });
+      this.authorizeCartAccess(cartItem, userId, guestId);
 
-    if (
-      (userId && cartItem.userId !== userId) ||
-      (guestId && cartItem.guestId !== guestId)
-    ) {
-      throw new ForbiddenException('You do not have access to this cart item');
-    }
-
-    return await this.prisma.cart.update({
-      where: { id: cartId },
-      data: { quantity },
-    });
-  }
-
-  // Sinkronisasi cart antara guest dan user
-  async syncCart(
-    userId: number,
-    guestCart: Array<{ catalogId: number; sizeId: number; quantity: number }>,
-  ) {
-    try {
-      for (const item of guestCart) {
-        const catalog = await this.prisma.catalog.findUnique({
-          where: { id: item.catalogId },
-          include: { sizes: true },
-        });
-
-        if (!catalog) {
-          throw new NotFoundException(
-            `Product with catalogId ${item.catalogId} not found.`,
-          );
-        }
-
-        const sizeAvailable = catalog.sizes.some((s) => s.id === item.sizeId);
-        if (!sizeAvailable) {
-          throw new BadRequestException(
-            `Size with sizeId ${item.sizeId} is not available for product ${item.catalogId}.`,
-          );
-        }
-
-        if (catalog.qty < item.quantity) {
-          throw new BadRequestException(
-            `Insufficient stock for product ${item.catalogId} with requested quantity ${item.quantity}.`,
-          );
-        }
-
-        const existingCartItem = await this.prisma.cart.findFirst({
-          where: {
-            userId,
-            catalogId: item.catalogId,
-            sizeId: item.sizeId,
-          },
-        });
-
-        if (existingCartItem) {
-          const newQuantity = existingCartItem.quantity + item.quantity;
-          if (catalog.qty < newQuantity) {
-            throw new BadRequestException(
-              `Insufficient stock for product ${item.catalogId} with updated quantity ${newQuantity}.`,
-            );
-          }
-
-          await this.prisma.cart.update({
-            where: { id: existingCartItem.id },
-            data: { quantity: newQuantity },
-          });
-        } else {
-          await this.prisma.cart.create({
-            data: {
-              userId,
-              catalogId: item.catalogId,
-              sizeId: item.sizeId,
-              quantity: item.quantity,
-            },
-          });
-        }
+      const catalog = await prisma.catalog.findUniqueOrThrow({
+        where: { id: cartItem.catalogId },
+      });
+      if (catalog.qty < quantity - cartItem.quantity) {
+        throw new BadRequestException(
+          `Insufficient stock for ${catalog.name}. Available: ${catalog.qty}`,
+        );
       }
 
-      return { message: 'Cart synchronized successfully.' };
-    } catch (error) {
-      console.error('Error during cart synchronization:', error);
-      throw new InternalServerErrorException('Failed to synchronize cart.');
-    }
+      await prisma.cart.update({ where: { id: cartId }, data: { quantity } });
+      await prisma.catalog.update({
+        where: { id: catalog.id },
+        data: { qty: { decrement: quantity - cartItem.quantity } },
+      });
+      return cartItem;
+    });
   }
 
-  // Menghapus item dari keranjang
   async removeCartItem(
     userId: number | null,
     guestId: string | null,
     cartId: number,
   ) {
-    const userOrGuest = this.validateUserOrGuest(userId, guestId);
+    return this.prisma.$transaction(async (prisma) => {
+      const cartItem = await prisma.cart.findUniqueOrThrow({
+        where: { id: cartId },
+        include: { catalog: true },
+      });
+      this.authorizeCartAccess(cartItem, userId, guestId);
 
-    const cartItem = await this.prisma.cart.findUnique({
-      where: { id: cartId },
-    });
-    if (!cartItem) throw new NotFoundException('Cart item not found');
+      await prisma.catalog.update({
+        where: { id: cartItem.catalog.id },
+        data: { qty: { increment: cartItem.quantity } },
+      });
+      await prisma.cart.delete({ where: { id: cartId } });
 
-    if (
-      (userId && cartItem.userId !== userId) ||
-      (guestId && cartItem.guestId !== guestId)
-    ) {
-      throw new ForbiddenException('You do not have access to this cart item');
-    }
-
-    return await this.prisma.cart.delete({
-      where: { id: cartId },
+      return {
+        message: 'Cart item deleted successfully.',
+        deletedItem: cartItem,
+      };
     });
   }
+
+  async syncCart(userId: number, guestId: string) {
+    const guestCarts = await this.findManyCarts({ where: { guestId } });
+    await Promise.all(
+      guestCarts.map(async (guestCart) => {
+        await this.addToCart(
+          userId,
+          null,
+          guestCart.catalogId,
+          guestCart.sizeId,
+          guestCart.quantity,
+        );
+        await this.prisma.cart.delete({ where: { id: guestCart.id } });
+      }),
+    );
+    return { message: 'Cart synced successfully' };
+  }
+
+  async removeManyCarts(params: Prisma.CartDeleteManyArgs) {
+    return this.prisma.cart.deleteMany(params);
+  }
+
+  private authorizeCartAccess(
+    cartItem: any,
+    userId: number | null,
+    guestId: string | null,
+  ) {
+    if (
+      (userId && cartItem.userId !== userId) ||
+      (!userId && guestId && cartItem.guestId !== guestId)
+    ) {
+      throw new ForbiddenException('Unauthorized access to cart item.');
+    }
+  }
+    // ✅ TAMBAHKAN FUNCTION getCartTotal DI CartService (COPY DARI CONTROLLER, MODIFIKASI RETURN VALUE)
+    async getCartTotal(userId: number | null, guestId: string | null): Promise<number> { // ✅ RETURN VALUE: Promise<number>
+      const cartItems = await this.findManyCarts({
+        where: { OR: [{ userId: userId || undefined }, { guestId: guestId || undefined }] },
+        include: { size: true },
+      });
+  
+      // ✅ PERHITUNGAN TOTAL, SAMA DENGAN DI CONTROLLER
+      const total = cartItems.reduce((acc, item) => acc + parseFloat(item.size.price.replace(/Rp|,/g, '')) * item.quantity, 0);
+      return total; // ✅ KEMBALIKAN NILAI NUMBER (FLOAT), TANPA FORMAT RUPIAH
+    }
 }

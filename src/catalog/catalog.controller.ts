@@ -17,8 +17,8 @@ import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { join, extname } from 'path';
 import * as sharp from 'sharp';
-import { CatalogService } from './catalog.service';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
+import {CatalogService}from './catalog.service'
 import { Catalog } from '@prisma/client';
 import { UpdateCatalogDto } from './dto/update-catalog.dto';
 import { Response } from 'express';

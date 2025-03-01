@@ -3,13 +3,17 @@ import { IsNumber, IsNotEmpty, ValidateIf } from 'class-validator';
 export class CreateCartDto {
   @IsNumber()
   @IsNotEmpty()
-  @ValidateIf((o) => !o.guestID, { message: 'userId must be provided when guestID is not present' })
+  @ValidateIf((o) => !o.guestId, {
+    message: 'userId must be provided when guestId is not present',
+  })
   userId: number;
 
-  @IsNumber()
-  @IsNotEmpty()
-  @ValidateIf((o) => !o.userId, { message: 'guestID must be provided when userId is not present' })
-  guestID: number;
+  // Catatan: Jika memang menggunakan guestId, sebaiknya tipe data guestId adalah string
+  // agar dapat menyimpan session ID (yang merupakan string).
+  @ValidateIf((o) => !o.userId, {
+    message: 'guestId must be provided when userId is not present',
+  })
+  guestId?: string;
 
   @IsNumber()
   @IsNotEmpty()

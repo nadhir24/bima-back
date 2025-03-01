@@ -3,7 +3,8 @@ import { NestFactory } from '@nestjs/core';
 import { AppModule } from './app.module';
 import { ValidationPipe } from '@nestjs/common';
 import { NestExpressApplication } from '@nestjs/platform-express';
-import session from 'express-session';
+import * as session from 'express-session';
+import { json } from 'express'; 
 
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule);
@@ -12,19 +13,15 @@ async function bootstrap() {
 
   app.useGlobalPipes(new ValidationPipe());
 
+  app.use(json()); 
 
   // Konfigurasi CORS
   app.enableCors({
     origin: true,
+    // credentials: true, 
   });
-  app.use(
-    session({
-      secret: 'your-secret-key',  // Change to your secret key
-      resave: false,
-      saveUninitialized: false,
-      cookie: { secure: false },  // Set to true in production if using https
-    }),
-  );
+
+  
   await app.listen(port, () => {
     console.log(`App running on port ${port}`);
   });

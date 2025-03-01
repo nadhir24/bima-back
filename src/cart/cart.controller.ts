@@ -11,47 +11,102 @@ import {
   UseGuards,
   Req,
   Res,
+  NotFoundException,
+  BadRequestException,
+  ValidationPipe,
 } from '@nestjs/common';
 import { CartService } from './cart.service';
 import { AuthGuard } from '@nestjs/passport';
-import { Request, Response } from 'express'; // Import dari express
+import { Request, Response } from 'express';
+import { CreateCartDto } from './dto/create-cart.dto';
+import { UpdateCartDto } from './dto/update-cart.dto';
 
 @Controller('cart')
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
+  private formatCartResponse(cart: any) {
+    return {
+      id: cart.id,
+      userId: cart.userId,
+      guestId: cart.guestId,
+      quantity: cart.quantity,
+      createdAt: cart.createdAt.toISOString(),
+      user: cart.user ? { id: cart.user.id, email: cart.user.email } : null,
+      catalog: cart.catalog ? { id: cart.catalog.id, name: cart.catalog.name, image: cart.catalog.image ? `http://localhost:5000${cart.catalog.image}` : null } : null,
+      size: cart.size ? { id: cart.size.id, size: cart.size.size, price: cart.size.price } : null,
+    };
+  }
+
+  @Get('total') // ✅ ENDPOINT UNTUK FRONTEND TAMPILAN TOTAL HARGA (FORMAT RUPIAH) - TETAP ADA, TAPI PANGGIL SERVICE
+  async getCartTotalFormatted(@Query('userId') userId: string, @Query('guestId') guestId: string, @Req() req: Request) {
+    const parsedUserId = userId ? Number(userId) : null;
+    const effectiveGuestId = guestId || req.sessionID;
+
+    // ✅ PANGGIL CartService.getCartTotal() UNTUK MENDAPATKAN NILAI NUMBER TOTAL HARGA DARI SERVICE
+    const totalNumber = await this.cartService.getCartTotal(parsedUserId, effectiveGuestId);
+
+    // ✅ FORMAT TOTAL HARGA MENJADI STRING RUPIAH DI CONTROLLER (UNTUK TAMPILAN)
+    return `Rp${totalNumber.toLocaleString('id-ID')}`;
+  }
+
+  @Get('findUnique/:id')
+  async findUniqueCart(@Param('id', ParseIntPipe) id: number) {
+    const cart = await this.cartService.findUniqueCart({ where: { id }, include: { user: true, catalog: true, size: true } });
+    if (!cart) throw new NotFoundException('Cart not found');
+    return this.formatCartResponse(cart);
+  }
+
+  @Get('findFirst')
+  async findFirstCart(@Query('userId') userId: string, @Query('guestId') guestId: string) {
+    const parsedUserId = userId ? Number(userId) : undefined;
+    const parsedGuestId = guestId || null;
+    const cart = await this.cartService.findFirstCart({ where: { OR: [{ userId: parsedUserId }, { guestId: parsedGuestId }] }, include: { user: true, catalog: true, size: true } });
+    if (!cart) throw new NotFoundException('Cart not found');
+    return this.formatCartResponse(cart);
+  }
+
   @Post('add')
-  async addToCart(
-    @Body('userId') userId: number | null,
-    @Body('catalogId') catalogId: number,
-    @Body('sizeId') sizeId: number,
-    @Body('quantity') quantity: number,
-    @Req() req: Request, // Type sudah benar
+  async addToCart(@Body(new ValidationPipe({ transform: true })) createCartDto: CreateCartDto, @Req() req: Request) {
+    const guestId = createCartDto.guestId || req.sessionID;
+    const cart = await this.cartService.addToCart(createCartDto.userId || null, guestId, createCartDto.catalogId, createCartDto.sizeId, createCartDto.quantity);
+    return this.formatCartResponse(cart);
+  }
+
+  @Put(':cartId')
+  async updateCartItem(
+    @Param('cartId', ParseIntPipe) cartId: number,
+    @Body(new ValidationPipe({ transform: true })) updateCartDto: UpdateCartDto,
+    @Req() req: Request,
   ) {
-    const guestId = req.sessionID;
-    return await this.cartService.addToCart(
-      userId,
-      guestId,
-      catalogId,
-      sizeId,
-      quantity,
-    );
+    if (!cartId) throw new BadRequestException('Cart ID is required');
+    if (updateCartDto.quantity === undefined) throw new BadRequestException('Quantity is required for update.');
+
+    const userId = updateCartDto.userId ?? null;
+    const guestId = userId ? null : req.sessionID;
+
+    const result = await this.cartService.updateCartItem(userId, guestId, cartId, updateCartDto.quantity);
+    return result;
+  }
+
+  @Delete(':cartId')
+  async removeCartItem(@Param('cartId', ParseIntPipe) cartId: number, @Req() req: Request) {
+    const userId = req.user?.id || null;
+    const guestId = userId ? null : req.sessionID;
+    return await this.cartService.removeCartItem(userId, guestId, cartId);
   }
 
   @UseGuards(AuthGuard('jwt'))
   @Post('sync')
   async syncCart(
-    @Req() req: Request, // Tambahkan type Request
-    @Body('cart')
-    guestCart: Array<{
-      catalogId: number;
-      sizeId: number;
-      quantity: number;
-    }>,
+    @Req() req: Request,
+    @Body('cart', new ValidationPipe({ transform: true }))
+    guestCart: Array<{ catalogId: number; sizeId: number; quantity: number }>,
   ) {
-    const userId = (req.user as { id: number }).id; // Type assertion untuk user
+    const userId = (req.user as { id: number }).id;
+    const guestId = req.sessionID;
     if (!guestCart?.length) return { message: 'No cart data to sync' };
-    return await this.cartService.syncCart(userId, guestCart);
+    return await this.cartService.syncCart(userId, guestId);
   }
 
   @Get('guest-session')
@@ -59,37 +114,11 @@ export class CartController {
     res.send({ guestId: req.sessionID });
   }
 
-  @Get('findAll')
-  async getCart(
-    @Query('userId') userId: number | null,
-    @Query('guestId') guestId: string | null,
-    @Req() req: Request,
-  ) {
-    if (!guestId) guestId = req.sessionID;
-    return await this.cartService.getCart(userId, guestId);
-  }
-
-  @Put(':cartId')
-  async updateCartItem(
-    @Param('cartId', ParseIntPipe) cartId: number,
-    @Body('quantity', ParseIntPipe) quantity: number,
-    @Body('userId') userId: number | null,
-    @Body('guestId') guestId: string | null,
-  ) {
-    return await this.cartService.updateCartItem(
-      userId,
-      guestId,
-      cartId,
-      quantity,
-    );
-  }
-
-  @Delete(':cartId')
-  async removeCartItem(
-    @Param('cartId', ParseIntPipe) cartId: number,
-    @Body('userId') userId: number | null,
-    @Body('guestId') guestId: string | null,
-  ) {
-    return await this.cartService.removeCartItem(userId, guestId, cartId);
+  @Get('findMany')
+  async findManyCarts(@Req() req: Request) {
+    const carts = await this.cartService.findManyCarts({
+      include: { user: true, catalog: true, size: true },
+    });
+    return carts.map((cart) => this.formatCartResponse(cart));
   }
 }

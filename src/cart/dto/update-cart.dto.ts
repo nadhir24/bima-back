@@ -1,6 +1,5 @@
-// src/cart/dto/update-cart.dto.ts
-
-import { IsInt, IsOptional } from 'class-validator';
+import { Transform } from 'class-transformer';
+import { IsInt, IsNotEmpty, IsOptional } from 'class-validator';
 
 export class UpdateCartDto {
   @IsOptional()
@@ -13,9 +12,19 @@ export class UpdateCartDto {
 
   @IsOptional()
   @IsInt()
-  sizeId?: number; // Add sizeId here
+  sizeId?: number;
 
   @IsOptional()
+  @Transform(({ value }) => {
+    console.log('Transforming quantity:', value);
+    const val = Number(value);
+    if (isNaN(val)) {
+      console.error('Invalid quantity:', value);
+      throw new Error('quantity must be a valid number');
+    }
+    return val;
+  })
   @IsInt()
+  @IsNotEmpty()
   quantity?: number;
 }

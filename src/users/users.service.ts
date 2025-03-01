@@ -41,7 +41,7 @@ export class UsersService {
     const salt = await bcrypt.genSalt(10);
     const passHash = await bcrypt.hash(createUserDto.password, salt);
 
-    const defaultRoleId = 1; // ID peran default
+    const defaultRoleId = 3; // ID peran default
 
     return this.prisma.user.create({
       data: {
