@@ -1,260 +1,239 @@
 // Datasource and Generator
 datasource db {
-    provider = "postgresql"
-    url      = env("DATABASE_URL")
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
-    provider = "prisma-client-js"
+  provider = "prisma-client-js"
 }
 
 // User Model
 model User {
-    id            Int             @id @default(autoincrement())
-    fullName      String
-    phoneNumber   String          @unique
-    email         String          @unique
-    password      String
-    createdAt     DateTime        @default(now())
-    carts         Cart[]
-    payments      Payment[]
-    userProfile   UserProfile?
-    userPassword  UserPassword?
-    userRoles     UserRole[]
-    photoProfile  String?
-    customers     Customer[]
-    invoices      Invoice[]       @relation("UserInvoices") // ✅ Opposite relation field untuk Invoice
+  id           Int           @id @default(autoincrement())
+  fullName     String
+  phoneNumber  String        @unique
+  email        String        @unique
+  password     String
+  createdAt    DateTime      @default(now())
+  carts        Cart[]
+  payments     Payment[]
+  userProfile  UserProfile?
+  userPassword UserPassword?
+  userRoles    UserRole[]
+  photoProfile String?
+  customers    Customer[]
+  invoices     Invoice[]     @relation("UserInvoices") // Relasi ke Invoice
 
-    @@map("users")
+  @@map("users")
 }
 
 // Catalog Model
 model Catalog {
-    id            Int             @id @default(autoincrement())
-    name          String
-    slug          String          @unique
-    category      String
-    categorySlug  String
-    description   String
-    qty           Int
-    isEnabled     Boolean
-    image         String?
-    sizes         Size[]          @relation("CatalogSizes")
-    carts         Cart[]          @relation("CatalogCarts")
-    productSlug   String
+  id           Int     @id @default(autoincrement())
+  name         String
+  slug         String  @unique
+  category     String
+  categorySlug String
+  description  String
+  qty          Int
+  isEnabled    Boolean
+  image        String?
+  sizes        Size[]  @relation("CatalogSizes")
+  carts        Cart[]  @relation("CatalogCarts")
+  productSlug  String
 
-    @@map("catalogs")
+  @@map("catalogs")
 }
 
 // Size Model
 model Size {
-    id        Int     @id @default(autoincrement())
-    size      String
-    price     String
-    catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id])
-    catalogId Int
-    carts     Cart[]    @relation("SizeCarts")
+  id        Int     @id @default(autoincrement())
+  size      String
+  price     String
+  catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id])
+  catalogId Int
+  carts     Cart[]  @relation("SizeCarts")
 }
 
 // Cart Model
 model Cart {
-    id        Int      @id @default(autoincrement())
-    userId    Int?     @map("user_id")
-    user      User?    @relation(fields: [userId], references: [id])
-    guestId   String?  @map("guest_id")
-    catalogId Int      @map("catalog_id")
-    catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])
-    sizeId    Int      @map("size_id")
-    size      Size     @relation("SizeCarts", fields: [sizeId], references: [id])
-    quantity  Int
-    createdAt DateTime @default(now()) @map("created_at")
-    paymentId Int?     @map("payment_id")
-    payment   Payment? @relation(fields: [paymentId], references: [id])
+  id        Int      @id @default(autoincrement())
+  userId    Int?     @map("user_id")
+  user      User?    @relation(fields: [userId], references: [id])
+  guestId   String?  @map("guest_id")
+  catalogId Int      @map("catalog_id")
+  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])
+  sizeId    Int      @map("size_id")
+  size      Size     @relation("SizeCarts", fields: [sizeId], references: [id])
+  quantity  Int
+  createdAt DateTime @default(now()) @map("created_at")
+  paymentId Int?     @map("payment_id")
+  payment   Payment? @relation(fields: [paymentId], references: [id])
 
-    @@map("carts")
-    @@index([userId], name: "idx_cart_user_id")
-    @@index([guestId], name: "idx_cart_guest_id")
+  @@index([userId], name: "idx_cart_user_id")
+  @@index([guestId], name: "idx_cart_guest_id")
+  @@map("carts")
 }
 
 // Payment Model
 model Payment {
-    id                 Int             @id @default(autoincrement())
-    userId             Int             @map("user_id")
-    user               User            @relation(fields: [userId], references: [id])
-    amount             Float
-    status             String
-    createdAt          DateTime        @default(now()) @map("created_at")
-    carts              Cart[]
-    xenditPaymentId    String?         @map("xendit_payment_id")
-    paymentMethod      String?         @map("payment_method")
-    failureReason      String?         @map("failure_reason")
-    invoice            Invoice?        @relation("InvoicePayment", fields: [invoiceId], references: [id])
-    invoiceId          Int?            @unique @map("invoice_id")
-    paymentRequest     PaymentRequest? @relation("PaymentRequestPayment", fields: [paymentRequestId], references: [id])
-    paymentRequestId   Int?            @unique @map("payment_request_id")
-    refunds            Refund[]
+  id                Int      @id @default(autoincrement())
+  userId            Int      @map("user_id")
+  user              User     @relation(fields: [userId], references: [id])
+  amount            Float
+  status            String
+  createdAt         DateTime @default(now()) @map("created_at")
+  carts             Cart[]
+  midtransPaymentId String?  @map("midtrans_payment_id") // Ganti xenditPaymentId menjadi midtransPaymentId
+  paymentMethod     String?  @map("payment_method")
+  failureReason     String?  @map("failure_reason")
+  invoice           Invoice? @relation("InvoicePayment", fields: [invoiceId], references: [id]) // Relasi ke Invoice
+  invoiceId         Int?     @unique @map("invoice_id")
+  refunds           Refund[]
 
-    @@map("payments")
+  @@map("payments")
 }
 
 // UserProfile Model
 model UserProfile {
-    id        Int       @id @default(autoincrement()) @map("uspro_id")
-    birthDate DateTime? @map("uspro_birth_date")
-    gender    String?   @map("uspro_gender")
-    addressId Int?      @map("uspro_addr_id")
-    userId    Int?      @unique @map("uspro_user_id")
-    address   Address?  @relation(fields: [addressId], references: [id])
-    user      User?     @relation(fields: [userId], references: [id])
+  id        Int       @id @default(autoincrement()) @map("uspro_id")
+  birthDate DateTime? @map("uspro_birth_date")
+  gender    String?   @map("uspro_gender")
+  addressId Int?      @map("uspro_addr_id")
+  userId    Int?      @unique @map("uspro_user_id")
+  address   Address?  @relation(fields: [addressId], references: [id])
+  user      User?     @relation(fields: [userId], references: [id])
 
-    @@index([id], name: "pkey_user_profiles")
-    @@map("user_profiles")
+  @@index([id], name: "pkey_user_profiles")
+  @@map("user_profiles")
 }
 
 // Address Model
 model Address {
-    id           Int           @id @default(autoincrement())
-    street       String
-    city         String
-    state        String
-    postalCode   String
-    country      String
-    userProfiles UserProfile[]
+  id           Int           @id @default(autoincrement())
+  street       String
+  city         String
+  state        String
+  postalCode   String
+  country      String
+  userProfiles UserProfile[]
 
-    @@map("address")
+  @@map("address")
 }
 
 // Role Model
 model Role {
-    id        Int        @id @default(autoincrement()) @map("role_id")
-    name      String?    @unique @map("role_name")
-    userRoles UserRole[]
+  id        Int        @id @default(autoincrement()) @map("role_id")
+  name      String?    @unique @map("role_name")
+  userRoles UserRole[]
 
-    @@index([id], name: "pkey_roles")
-    @@map("roles")
+  @@index([id], name: "pkey_roles")
+  @@map("roles")
 }
 
 // UserRole Model
 model UserRole {
-    userId Int
-    roleId Int
-    user   User     @relation(fields: [userId], references: [id])
-    role   Role     @relation(fields: [roleId], references: [id])
+  userId Int
+  roleId Int
+  user   User @relation(fields: [userId], references: [id])
+  role   Role @relation(fields: [roleId], references: [id])
 
-    @@id([userId, roleId])
-    @@map("user_roles")
+  @@id([userId, roleId])
+  @@map("user_roles")
 }
 
 // UserPassword Model
 model UserPassword {
-    id           Int     @id @default(autoincrement())
-    userId       Int     @unique
-    passwordHash String?
-    passwordSalt String?
-    user         User    @relation(fields: [userId], references: [id])
+  id           Int     @id @default(autoincrement())
+  userId       Int     @unique
+  passwordHash String?
+  passwordSalt String?
+  user         User    @relation(fields: [userId], references: [id])
 
-    @@map("user_password")
+  @@map("user_password")
 }
 
-// Invoice Model
-model Invoice {
-    id              Int           @id @default(autoincrement())
-    xenditInvoiceId String        @unique @map("xendit_invoice_id")
-    externalId      String?       @map("external_id") // ADDED externalId FIELD
-    status          String
-    amount          Float
-    currency        String
-    invoiceUrl      String?       @map("invoice_url")
-    createdAt       DateTime      @default(now()) @map("created_at")
-    updatedAt       DateTime      @updatedAt @map("updated_at")
-    items           InvoiceItem[]
-    userId          Int?          @map("user_id") // Field userId (PENTING! Tipe Int? atau sesuaikan)
-    user            User?         @relation("UserInvoices", fields: [userId], references: [id]) // ✅ Relasi ke model User + OPPOSITE RELATION FIELD di model User
-    payment         Payment?      @relation("InvoicePayment")
+// PaymentWebhook Model (Baru)
+model PaymentWebhook {
+  id              Int      @id @default(autoincrement())
+  orderId         String   @map("order_id") // Order ID dari Midtrans
+  transactionTime DateTime @map("transaction_time")
+  status          String   @map("status") // Status pembayaran dari Midtrans
+  paymentType     String   @map("payment_type") // Jenis pembayaran
+  grossAmount     Float    @map("gross_amount")
+  signatureKey    String   @map("signature_key") // Signature key untuk validasi
+  createdAt       DateTime @default(now()) @map("created_at")
 
-    @@map("invoices")
-    @@index([xenditInvoiceId], name: "idx_invoice_xendit_id")
-    @@index([userId], name: "idx_invoice_user_id") // Index untuk userId
+  @@index([orderId], name: "idx_webhook_order_id")
+  @@map("payment_webhooks")
+}
+
+// Invoice Model (Diperbarui)
+model Invoice {
+  id              Int           @id @default(autoincrement())
+  midtransOrderId String?       @unique @map("midtrans_order_id") // Jadikan nullable dengan `String?`
+  externalId      String?       @map("external_id")
+  status          String        @default("PENDING") // Status awal invoice
+  amount          Float         @map("amount")
+  currency        String        @default("IDR") // Default IDR
+  paymentUrl      String?       @map("payment_url") // Redirect URL dari Midtrans Snap
+  createdAt       DateTime      @default(now()) @map("created_at")
+  updatedAt       DateTime      @updatedAt @map("updated_at")
+  items           InvoiceItem[]
+  userId          Int?          @map("user_id") // Relasi ke User
+  user            User?         @relation("UserInvoices", fields: [userId], references: [id])
+  paymentMethod   String?       @map("payment_method") // Metode pembayaran yang dipilih
+  paymentStatus   String?       @map("payment_status") // Status pembayaran dari Midtrans
+  payment         Payment?      @relation("InvoicePayment") // Hapus fields dan references
+  paymentId       Int?          @unique @map("payment_id") // ID unik untuk Payment
+
+  @@index([midtransOrderId], name: "idx_invoice_midtrans_id")
+  @@index([userId], name: "idx_invoice_user_id")
+  @@map("invoices")
 }
 
 // InvoiceItem Model
 model InvoiceItem {
-    id        Int     @id @default(autoincrement())
-    invoiceId Int     @map("invoice_id")
-    invoice   Invoice @relation(fields: [invoiceId], references: [id])
-    name      String
-    quantity  Int
-    price     Float
-    currency  String
+  id        Int     @id @default(autoincrement())
+  invoiceId Int     @map("invoice_id")
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
+  name      String
+  quantity  Int
+  price     Float
+  currency  String
 
-    @@map("invoice_items")
-}
-
-// PaymentRequest Model
-model PaymentRequest {
-    id                      Int      @id @default(autoincrement())
-    xenditPaymentRequestId  String   @unique @map("xendit_payment_request_id")
-    externalId              String?  @unique @map("external_id") // ADDED externalId FIELD
-    status                  String
-    amount                  Float
-    currency                String
-    paymentRequestUrl       String?  @map("payment_request_url")
-    createdAt               DateTime @default(now()) @map("created_at")
-    updatedAt               DateTime @updatedAt @map("updated_at")
-    payment                 Payment? @relation("PaymentRequestPayment")
-    paymentMethod           String?
-    paymentMethodCategory   String?
-
-    @@map("payment_requests")
-    @@index([xenditPaymentRequestId], name: "idx_payment_request_xendit_id")
-}
-
-// Refund Model
-model Refund {
-    id             Int      @id @default(autoincrement())
-    paymentId      Int      @map("payment_id")
-    payment        Payment  @relation(fields: [paymentId], references: [id])
-    xenditRefundId String   @unique @map("xendit_refund_id")
-    status         String
-    amount         Float
-    reason         String?
-    createdAt      DateTime @default(now()) @map("created_at")
-    updatedAt      DateTime @updatedAt @map("updated_at")
-
-    @@map("refunds")
-    @@index([xenditRefundId], name: "idx_refund_xendit_id")
+  @@map("invoice_items")
 }
 
 // Customer Model
 model Customer {
-    id               Int       @id @default(autoincrement())
-    userId           Int?      @map("user_id")
-    user             User?     @relation(fields: [userId], references: [id])
-    xenditCustomerId String    @unique @map("xendit_customer_id")
-    email            String?
-    phoneNumber      String?   @map("phone_number")
-    givenNames       String?   @map("given_names")
-    surname          String?
-    createdAt        DateTime  @default(now()) @map("created_at")
-    updatedAt        DateTime  @updatedAt @map("updated_at")
+  id          Int      @id @default(autoincrement())
+  userId      Int?     @map("user_id")
+  user        User?    @relation(fields: [userId], references: [id])
+  email       String?
+  phoneNumber String?  @map("phone_number")
+  givenNames  String?  @map("given_names")
+  surname     String?
+  createdAt   DateTime @default(now()) @map("created_at")
+  updatedAt   DateTime @updatedAt @map("updated_at")
 
-    @@map("customers")
-    @@index([xenditCustomerId], name: "idx_customer_xendit_id")
-    @@index([userId], name: "idx_customer_user_id")
+  @@index([userId], name: "idx_customer_user_id")
+  @@map("customers")
 }
 
-// Payout Model
-model Payout {
-    id             Int      @id @default(autoincrement())
-    xenditPayoutId String   @unique @map("xendit_payout_id")
-    status         String
-    amount         Float
-    bankCode       String   @map("bank_code")
-    accountNumber  String   @map("account_number")
-    description    String?
-    createdAt      DateTime @default(now()) @map("created_at")
-    updatedAt      DateTime @updatedAt @map("updated_at")
+// Refund Model
+model Refund {
+  id        Int      @id @default(autoincrement())
+  paymentId Int      @map("payment_id")
+  payment   Payment  @relation(fields: [paymentId], references: [id])
+  refundId  String   @unique @map("refund_id") // ID unik untuk refund
+  status    String   @map("status") // Status refund (misalnya pending, success, failed)
+  amount    Float    @map("amount")
+  reason    String?  @map("reason") // Alasan refund
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
 
-    @@map("payouts")
-    @@index([xenditPayoutId], name: "idx_payout_xendit_id")
+  @@index([refundId], name: "idx_refund_id")
+  @@map("refunds")
 }

@@ -4,9 +4,9 @@ import { CartController } from './cart.controller';
 import { PaymentModule } from 'src/payment/payment.module';
 
 @Module({
-  imports: [forwardRef(() => PaymentModule)], // ✅ Gunakan forwardRef
+  imports: [forwardRef(() => PaymentModule)],
   controllers: [CartController],
   providers: [CartService],
-  exports: [CartService], // Penting: Ekspor CartService
+  exports: [CartService],
 })
 export class CartModule {}

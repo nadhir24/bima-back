@@ -10,20 +10,17 @@ import { AuthModule } from './auth/auth.module';
 import { UsersController } from './users/users.controller';
 import { JwtModule } from '@nestjs/jwt'; // Import JwtModule
 import { JwtMiddleware } from './auth/jwt.middleware';
-import { CheckoutService } from './checkout/checkout.service';
-import { CheckoutController } from './checkout/checkout.controller';
 import { AdminService } from './admin/admin.service';
 import { AdminController } from './admin/admin.controller';
-import { XenditModule } from './xendit/xendit.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
+      envFilePath: '.env', // Pastikan file .env di root directory
     }),
     PrismaModule,
     UsersModule,
-    XenditModule,
     CatalogModule,
     CartModule,
     PaymentModule,
@@ -33,8 +30,8 @@ import { XenditModule } from './xendit/xendit.module';
       signOptions: { expiresIn: '1h' }, // Token expired in 1 hour
     }),
   ],
-  providers: [CheckoutService, AdminService],
-  controllers: [CheckoutController, AdminController],
+  providers: [AdminService],
+  controllers: [AdminController],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {

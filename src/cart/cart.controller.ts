@@ -67,10 +67,23 @@ export class CartController {
   }
 
   @Post('add')
-  async addToCart(@Body(new ValidationPipe({ transform: true })) createCartDto: CreateCartDto, @Req() req: Request) {
-    const guestId = createCartDto.guestId || req.sessionID;
-    const cart = await this.cartService.addToCart(createCartDto.userId || null, guestId, createCartDto.catalogId, createCartDto.sizeId, createCartDto.quantity);
-    return this.formatCartResponse(cart);
+  async addToCart(@Body() createCartDto: CreateCartDto, @Req() req: Request) {
+    console.log("Received payload:", createCartDto);
+  
+    try {
+      const guestId = createCartDto.guestId || req.sessionID;
+      const cart = await this.cartService.addToCart(
+        createCartDto.userId || null,
+        guestId,
+        createCartDto.catalogId,
+        createCartDto.sizeId,
+        createCartDto.quantity,
+      );
+      return this.formatCartResponse(cart);
+    } catch (error) {
+      console.error("Error in addToCart:", error);
+      throw error; // Re-throw error untuk ditangani oleh middleware
+    }
   }
 
   @Put(':cartId')

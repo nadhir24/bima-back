@@ -1,84 +1,84 @@
-import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../../../prisma/prisma.service';
-import Xendit from 'xendit-node';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, HttpException, HttpStatus } from '@nestjs/common';
+import { PrismaService } from 'prisma/prisma.service';
+import { SnapService } from '../snap/snap.service';
+import {
+  CreateRefundDto,
+  RefundResponse,
+} from '../interfaces/refund.interface';
 
 @Injectable()
 export class RefundService {
-    private readonly xenditInstance: any;
+  constructor(
+    private prisma: PrismaService,
+    private snapService: SnapService,
+  ) {}
 
-    constructor(
-        private prisma: PrismaService,
-        private configService: ConfigService,
-    ) {
-        this.xenditInstance = new Xendit({
-            secretKey: this.configService.get<string>('XENDIT_SECRET_KEY'),
+  async createRefund(dto: CreateRefundDto): Promise<RefundResponse> {
+    return this.prisma.$transaction(async (prisma) => {
+      // Cek payment exists
+      const payment = await prisma.payment.findUnique({
+        where: { id: dto.paymentId },
+        include: { invoice: true },
+      });
+
+      if (!payment) {
+        throw new HttpException('Payment not found', HttpStatus.NOT_FOUND);
+      }
+
+      if (payment.status !== 'SETTLEMENT') {
+        throw new HttpException(
+          'Payment must be settled before refund',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      if (dto.amount > payment.amount) {
+        throw new HttpException(
+          'Refund amount cannot exceed payment amount',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      try {
+        // Buat refund di Midtrans
+        const refundId = `refund-${Date.now()}-${Math.floor(Math.random() * 1000)}`;
+
+        // Simpan refund ke database
+        const refund = await prisma.refund.create({
+          data: {
+            paymentId: dto.paymentId,
+            refundId,
+            status: 'PENDING',
+            amount: dto.amount,
+            reason: dto.reason,
+          },
         });
-    }
 
-    async createRefund(paymentId: number, payload: any): Promise<any> {
-        const refunds = this.xenditInstance.Refunds;
-        const payment = await this.prisma.payment.findUnique({
-            where: { id: paymentId },
+        // Update payment status
+        await prisma.payment.update({
+          where: { id: dto.paymentId },
+          data: { status: 'REFUND_PENDING' },
         });
 
-        if (!payment || !payment.xenditPaymentId) {
-            throw new Error('Payment tidak ditemukan atau tidak memiliki xenditPaymentId.');
-        }
+        return refund;
+      } catch (error) {
+        throw new HttpException(
+          'Failed to create refund',
+          HttpStatus.INTERNAL_SERVER_ERROR,
+        );
+      }
+    });
+  }
 
-        try {
-            const createdRefund = await refunds.create({
-                ...payload,
-                payment_id: payment.xenditPaymentId, // Gunakan xenditPaymentId dari model Payment
-            });
+  async getRefundStatus(refundId: string): Promise<RefundResponse> {
+    const refund = await this.prisma.refund.findUnique({
+      where: { refundId },
+    });
 
-            const savedRefund = await this.prisma.refund.create({
-                data: {
-                    paymentId: paymentId, // Simpan paymentId dari database lokal
-                    xenditRefundId: createdRefund.id,
-                    status: createdRefund.status,
-                    amount: createdRefund.amount,
-                    reason: payload.reason,
-                },
-            });
-
-            return savedRefund;
-        } catch (error) {
-            console.error('Error creating Refund:', error);
-            throw new Error('Gagal membuat Refund Xendit.');
-        }
+    if (!refund) {
+      throw new HttpException('Refund not found', HttpStatus.NOT_FOUND);
     }
 
-    async getRefundById(refundId: string): Promise<any> {
-        const refunds = this.xenditInstance.Refunds;
-
-        try {
-            const refundXendit = await refunds.getById(refundId);
-
-            await this.prisma.refund.update({
-                where: { xenditRefundId: refundId },
-                data: { status: refundXendit.status },
-            });
-
-            const refundDB = await this.prisma.refund.findUnique({
-                where: { xenditRefundId: refundId },
-            });
-            return refundDB;
-        } catch (error) {
-            console.error('Error getting Refund by ID:', error);
-            throw new Error('Gagal mendapatkan Refund.');
-        }
-    }
-
-    async listRefunds(queryParams?: any): Promise<any[]> {
-        const refunds = this.xenditInstance.Refunds;
-
-        try {
-            const refundListXendit = await refunds.list(queryParams);
-            return refundListXendit.data;
-        } catch (error) {
-            console.error('Error listing Refunds:', error);
-            throw new Error('Gagal mendapatkan daftar Refund.');
-        }
-    }
+    return refund;
+  }
 }

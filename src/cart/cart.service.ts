@@ -23,6 +23,7 @@ export class CartService {
     quantity: number,
   ) {
     return this.prisma.$transaction(async (prisma) => {
+      // Validasi ketersediaan barang
       const catalog = await prisma.catalog.findUniqueOrThrow({
         where: { id: catalogId },
       });
@@ -31,16 +32,28 @@ export class CartService {
           `Insufficient stock for ${catalog.name}. Available: ${catalog.qty}`,
         );
       }
+  
+      // Validasi ukuran
       await prisma.size.findUniqueOrThrow({ where: { id: sizeId } });
-
+  
+      // Validasi pengguna
+      if (userId) {
+        await prisma.user.findUniqueOrThrow({ where: { id: userId } });
+      } else if (!guestId) {
+        throw new BadRequestException('Either userId or guestId must be provided.');
+      }
+  
+      // Buat entri di tabel cart
       const cartItem = await prisma.cart.create({
         data: { quantity, userId, guestId, catalogId, sizeId },
       });
-
+  
+      // Kurangi stok barang
       await prisma.catalog.update({
         where: { id: catalogId },
         data: { qty: { decrement: quantity } },
       });
+  
       return cartItem;
     });
   }

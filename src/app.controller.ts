@@ -9,4 +9,14 @@ export class AppController {
   getHello(): string {
     return this.appService.getHello();
   }
+  @Get('success')
+  successRedirect() {
+    return 'Pembayaran berhasil! Terima kasih telah berbelanja.';
+  }
+
+  @Get('failure')
+  failureRedirect() {
+    return 'Pembayaran gagal. Silakan coba lagi.';
+  }
 }
+

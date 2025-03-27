@@ -12,6 +12,7 @@ import {
   Delete,
   Patch,
   ParseIntPipe,
+  Put,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -123,7 +124,7 @@ export class CatalogController {
     }
   }
 
-  @Patch(':id')
+  @Put(':id')
   @UseInterceptors(
     FileInterceptor('image', {
       storage: diskStorage({

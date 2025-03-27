@@ -64,59 +64,91 @@ export class UsersService {
   }
 
   async updateUser(id: number, updateUserDto: UpdateUserDto) {
-    const user = await this.prisma.user.findUnique({ where: { id } });
+    const user = await this.prisma.user.findUnique({
+        where: { id },
+        include: { userProfile: true }, // Supaya kita bisa akses addressId
+    });
+
+    if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
     const {
       fullName,
       phoneNumber,
       email,
       uspro_gender,
-      uspro_birt_date,
+      uspro_birth_date,
       roleID,
       photoProfile,
-    } = updateUserDto;
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+      address_street,
+      address_city,
+      address_province, // ini untuk "state"
+      address_postalCode,
+      address_country,
+  } = updateUserDto;
 
     try {
-      const updateUser = await this.prisma.user.update({
-        where: { id },
-        data: {
-          fullName,
-          phoneNumber,
-          email,
-          userProfile: {
-            update: {
-              gender: uspro_gender,
-              // birthDate: uspro_birt_date,
-            },
-          },
-          userRoles: {
-            update: {
-              where: {
-                userId_roleId: {
-                  userId: id,
-                  roleId: roleID,
+        const updateUser = await this.prisma.user.update({
+            where: { id },
+            data: {
+                fullName,
+                phoneNumber,
+                email,
+                userProfile: {
+                    update: {
+                        gender: uspro_gender,
+                        birthDate: uspro_birth_date ? new Date(uspro_birth_date) : null,
+                        address: address_street || address_city || address_province
+                            ? {
+                                  upsert: {
+                                      create: {
+                                          street: address_street,
+                                          city: address_city,
+                                          state: address_province, // di Prisma namanya "state"
+                                          postalCode: "00000", // sementara default karena tidak ada di DTO
+                                          country: "Indonesia", // sementara default karena tidak ada di DTO
+                                      },
+                                      update: {
+                                          street: address_street,
+                                          city: address_city,
+                                          state: address_province,
+                                          postalCode: address_postalCode,
+                                          country: address_country,
+                                      },
+                                  },
+                              }
+                            : undefined,
+                    },
                 },
-              },
-              data: {
-                roleId: roleID,
-              },
+                userRoles: {
+                    update: {
+                        where: {
+                            userId_roleId: {
+                                userId: id,
+                                roleId: roleID,
+                            },
+                        },
+                        data: {
+                            roleId: roleID,
+                        },
+                    },
+                },
+                photoProfile,
             },
-          },
-          photoProfile,
-        },
-      });
-      return {
-        statusCode: HttpStatus.OK,
-        message: 'User updated successfully',
-        data: updateUser,
-      };
+        });
+
+        return {
+            statusCode: HttpStatus.OK,
+            message: 'User updated successfully',
+            data: updateUser,
+        };
     } catch (error) {
-      throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
+        throw new HttpException('Failed to update user', HttpStatus.BAD_REQUEST);
     }
-  }
+}
+
+
   async deleteUser(id: number) {
     const user = await this.prisma.user.findUnique({
       where: { id },
