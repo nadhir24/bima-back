@@ -19,7 +19,7 @@ import { diskStorage } from 'multer';
 import { join, extname } from 'path';
 import * as sharp from 'sharp';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
-import {CatalogService}from './catalog.service'
+import { CatalogService } from './catalog.service';
 import { Catalog } from '@prisma/client';
 import { UpdateCatalogDto } from './dto/update-catalog.dto';
 import { Response } from 'express';
@@ -29,6 +29,25 @@ export class CatalogController {
   constructor(private readonly catalogService: CatalogService) {}
 
   // Helper function to generate blurDataURL
+  private async generateBlurDataURL(imagePath: string): Promise<string> {
+    try {
+      const fullPath = join(
+        process.cwd(),
+        'uploads',
+        'catalog_images',
+        imagePath.split('/').pop(),
+      );
+      const imageBuffer = await sharp(fullPath)
+        .resize(20) // Small size for blur placeholder
+        .toBuffer();
+
+      // Convert to base64 for data URL
+      return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+    } catch (error) {
+      console.error('Error generating blur data URL:', error);
+      return null;
+    }
+  }
 
   @Get()
   async findAll(): Promise<Catalog[]> {
@@ -94,7 +113,20 @@ export class CatalogController {
       let blurDataURL = null;
 
       // Generate blur data URL using plaiceholder
-      
+      if (image) {
+        try {
+          const imagePath = join(
+            process.cwd(),
+            'uploads',
+            'catalog_images',
+            image.filename,
+          );
+          blurDataURL = await this.generateBlurDataURL(imagePath);
+        } catch (error) {
+          console.error('Error generating blur data URL:', error);
+        }
+      }
+
       const isEnabled = formData.isEnabled === 'true';
       const productSlug = formData.name.toLowerCase().replace(/\s+/g, '-');
       const categorySlug = formData.category.toLowerCase().replace(/\s+/g, '-');
@@ -106,12 +138,12 @@ export class CatalogController {
         productSlug,
         sizes: formData.sizes.map((sizeData) => ({
           size: sizeData.size,
-          price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')),
+          price: parseFloat(sizeData.price.replace(/[^d.-]/g, '')).toString(),
+          qty: parseInt(sizeData.qty, 10) || 0,
         })),
-        qty: parseInt(formData.qty, 10),
         isEnabled,
         image: finalImageUrl,
-        blurDataURL, // Include the blur data URL
+        blurDataURL,
         description: formData.description,
       };
 
@@ -130,6 +162,7 @@ export class CatalogController {
       storage: diskStorage({
         destination: join(
           __dirname,
+          '..',
           '..',
           '..',
           '..',
@@ -156,24 +189,81 @@ export class CatalogController {
 
       let blurDataURL = null;
 
-      // Generate blur data URL if a new image is provided
-      
+      if (image) {
+        try {
+          const imagePath = join(
+            process.cwd(),
+            'uploads',
+            'catalog_images',
+            image.filename,
+          );
+          blurDataURL = await this.generateBlurDataURL(imagePath);
+        } catch (error) {
+          console.error('Error generating blur data URL:', error);
+        }
+      }
+
       const isEnabled = formData.isEnabled === 'true';
+
+      let sizes;
+      let processedSizes;
+      try {
+        sizes =
+          typeof formData.sizes === 'string'
+            ? JSON.parse(formData.sizes)
+            : formData.sizes;
+
+        if (!Array.isArray(sizes)) {
+          throw new Error('Sizes must be an array');
+        }
+
+        processedSizes = sizes.map((sizeData: any) => {
+          if (!sizeData || typeof sizeData !== 'object') {
+            throw new Error('Invalid size data format');
+          }
+
+          const id = sizeData.id;
+          if (!id) {
+            throw new Error('Size ID is required');
+          }
+
+          return {
+            id: parseInt(id, 10),
+            size: sizeData.size,
+            qty: parseInt(sizeData.qty, 10) || 0,
+            price: sizeData.price, // Perubahan di sini: jangan hapus karakter non-angka
+          };
+        });
+
+        sizes = processedSizes;
+      } catch (error) {
+        console.error('Error processing sizes:', error);
+        throw new HttpException(
+          `Failed to process size data: ${error.message}`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
+      console.log('Final sizes array before service call:', processedSizes);
+
+      if (processedSizes.length === 0) {
+        console.error('Update catalog failed: No sizes provided in request');
+        console.error('Received formData:', formData);
+        console.error('Processed sizes:', sizes);
+        throw new HttpException(
+          'At least one size is required',
+          HttpStatus.BAD_REQUEST,
+        );
+      }
 
       const updateCatalogDto: UpdateCatalogDto = {
         name: formData.name,
         category: formData.category,
         description: formData.description,
-        sizes: Array.isArray(formData.sizes)
-          ? formData.sizes.map((sizeData: any) => ({
-              size: sizeData.size,
-              price: parseFloat(sizeData.price.replace(/[^\d.-]/g, '')),
-            }))
-          : [],
-        qty:
-          formData.qty !== undefined ? parseInt(formData.qty, 10) : undefined,
+        sizes,
         isEnabled,
         image: finalImageUrl,
+        blurDataURL,
       };
 
       const numericId = parseInt(id, 10);

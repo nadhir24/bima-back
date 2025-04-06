@@ -14,6 +14,7 @@ import {
   NotFoundException,
   BadRequestException,
   ValidationPipe,
+  HttpException,
 } from '@nestjs/common';
 import { CartService } from './cart.service';
 import { AuthGuard } from '@nestjs/passport';
@@ -38,16 +39,19 @@ export class CartController {
     };
   }
 
-  @Get('total') // ✅ ENDPOINT UNTUK FRONTEND TAMPILAN TOTAL HARGA (FORMAT RUPIAH) - TETAP ADA, TAPI PANGGIL SERVICE
+
+  @Get('total')
   async getCartTotalFormatted(@Query('userId') userId: string, @Query('guestId') guestId: string, @Req() req: Request) {
     const parsedUserId = userId ? Number(userId) : null;
     const effectiveGuestId = guestId || req.sessionID;
-
-    // ✅ PANGGIL CartService.getCartTotal() UNTUK MENDAPATKAN NILAI NUMBER TOTAL HARGA DARI SERVICE
+  
     const totalNumber = await this.cartService.getCartTotal(parsedUserId, effectiveGuestId);
-
-    // ✅ FORMAT TOTAL HARGA MENJADI STRING RUPIAH DI CONTROLLER (UNTUK TAMPILAN)
-    return `Rp${totalNumber.toLocaleString('id-ID')}`;
+  
+  
+    // Format total harga menjadi string Rupiah
+    const formattedTotal = `Rp${totalNumber.toLocaleString('id-ID')}`;
+  
+    return formattedTotal;
   }
 
   @Get('findUnique/:id')
@@ -92,16 +96,37 @@ export class CartController {
     @Body(new ValidationPipe({ transform: true })) updateCartDto: UpdateCartDto,
     @Req() req: Request,
   ) {
-    if (!cartId) throw new BadRequestException('Cart ID is required');
-    if (updateCartDto.quantity === undefined) throw new BadRequestException('Quantity is required for update.');
-
-    const userId = updateCartDto.userId ?? null;
-    const guestId = userId ? null : req.sessionID;
-
-    const result = await this.cartService.updateCartItem(userId, guestId, cartId, updateCartDto.quantity);
-    return result;
+    try {
+      if (!cartId) throw new BadRequestException('Cart ID is required');
+      if (updateCartDto.quantity === undefined) throw new BadRequestException('Quantity is required for update.');
+  
+      const userId = updateCartDto.userId || null;
+      const guestId = userId ? null : req.sessionID;
+  
+      const result = await this.cartService.updateCartItem(
+        userId, 
+        guestId, 
+        cartId, 
+        updateCartDto.quantity
+      );
+      
+      // Format respons dengan konsisten
+      return {
+        success: true,
+        data: this.formatCartResponse(result)
+      };
+    } catch (error) {
+      // Perbaikan error handling
+      console.error("Controller error:", error);
+      
+      // Return format error yang konsisten
+      return {
+        success: false,
+        message: error.response?.message || error.message || 'Failed to update cart item'
+      };
+    }
   }
-
+  
   @Delete(':cartId')
   async removeCartItem(@Param('cartId', ParseIntPipe) cartId: number, @Req() req: Request) {
     const userId = req.user?.id || null;

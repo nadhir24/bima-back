@@ -14,6 +14,9 @@ class SizeDto {
 
   @IsString()
   price: string;
+
+  @IsNumber()
+  qty: number;
 }
 
 export class CreateCatalogDto {
@@ -21,16 +24,13 @@ export class CreateCatalogDto {
   name: string;
 
   @IsString()
-  blurDataURL?: string; // Add this line
+  blurDataURL?: string;
 
   @IsString()
   category: string;
 
   @IsString()
   description: string;
-
-  @IsNumber()
-  qty: number;
 
   @IsBoolean()
   isEnabled: boolean;

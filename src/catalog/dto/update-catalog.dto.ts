@@ -43,9 +43,11 @@ export class UpdateCatalogDto {
 
   @IsArray()
   @IsOptional()
-  sizes?: {
-    size: string;
-    price: string; // Ensure this matches your price format
+    sizes?: {
+    id?: number;
+    size?: string;
+    price?: string;
+    qty?: number;
   }[];
 
   blurDataURL?: string; // Add this line

@@ -23,7 +23,7 @@ model User {
   userRoles    UserRole[]
   photoProfile String?
   customers    Customer[]
-  invoices     Invoice[]     @relation("UserInvoices") // Relasi ke Invoice
+  invoices     Invoice[]     @relation("UserInvoices")
 
   @@map("users")
 }
@@ -36,7 +36,6 @@ model Catalog {
   category     String
   categorySlug String
   description  String
-  qty          Int
   isEnabled    Boolean
   image        String?
   sizes        Size[]  @relation("CatalogSizes")
@@ -46,14 +45,17 @@ model Catalog {
   @@map("catalogs")
 }
 
-// Size Model
+// Size Model - Updated with qty field
 model Size {
   id        Int     @id @default(autoincrement())
   size      String
   price     String
+  qty       Int     @default(0)  // Added qty field for size-specific inventory
   catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id])
   catalogId Int
   carts     Cart[]  @relation("SizeCarts")
+
+  @@map("sizes")
 }
 
 // Cart Model
@@ -79,16 +81,16 @@ model Cart {
 // Payment Model
 model Payment {
   id                Int      @id @default(autoincrement())
-  userId            Int      @map("user_id")
-  user              User     @relation(fields: [userId], references: [id])
+  userId            Int?     @map("user_id")
+  user              User?    @relation(fields: [userId], references: [id])
   amount            Float
   status            String
   createdAt         DateTime @default(now()) @map("created_at")
   carts             Cart[]
-  midtransPaymentId String?  @map("midtrans_payment_id") // Ganti xenditPaymentId menjadi midtransPaymentId
+  midtransPaymentId String?  @map("midtrans_payment_id")
   paymentMethod     String?  @map("payment_method")
   failureReason     String?  @map("failure_reason")
-  invoice           Invoice? @relation("InvoicePayment", fields: [invoiceId], references: [id]) // Relasi ke Invoice
+  invoice           Invoice? @relation("InvoicePayment", fields: [invoiceId], references: [id])
   invoiceId         Int?     @unique @map("invoice_id")
   refunds           Refund[]
 
@@ -154,39 +156,39 @@ model UserPassword {
   @@map("user_password")
 }
 
-// PaymentWebhook Model (Baru)
+// PaymentWebhook Model
 model PaymentWebhook {
   id              Int      @id @default(autoincrement())
-  orderId         String   @map("order_id") // Order ID dari Midtrans
+  orderId         String   @map("order_id")
   transactionTime DateTime @map("transaction_time")
-  status          String   @map("status") // Status pembayaran dari Midtrans
-  paymentType     String   @map("payment_type") // Jenis pembayaran
+  status          String   @map("status")
+  paymentType     String   @map("payment_type")
   grossAmount     Float    @map("gross_amount")
-  signatureKey    String   @map("signature_key") // Signature key untuk validasi
+  signatureKey    String   @map("signature_key")
   createdAt       DateTime @default(now()) @map("created_at")
 
   @@index([orderId], name: "idx_webhook_order_id")
   @@map("payment_webhooks")
 }
 
-// Invoice Model (Diperbarui)
+// Invoice Model
 model Invoice {
   id              Int           @id @default(autoincrement())
-  midtransOrderId String?       @unique @map("midtrans_order_id") // Jadikan nullable dengan `String?`
+  midtransOrderId String?       @unique @map("midtrans_order_id")
   externalId      String?       @map("external_id")
-  status          String        @default("PENDING") // Status awal invoice
+  status          String        @default("PENDING")
   amount          Float         @map("amount")
-  currency        String        @default("IDR") // Default IDR
-  paymentUrl      String?       @map("payment_url") // Redirect URL dari Midtrans Snap
+  currency        String        @default("IDR")
+  paymentUrl      String?       @map("payment_url")
   createdAt       DateTime      @default(now()) @map("created_at")
   updatedAt       DateTime      @updatedAt @map("updated_at")
   items           InvoiceItem[]
-  userId          Int?          @map("user_id") // Relasi ke User
+  userId          Int?          @map("user_id")
   user            User?         @relation("UserInvoices", fields: [userId], references: [id])
-  paymentMethod   String?       @map("payment_method") // Metode pembayaran yang dipilih
-  paymentStatus   String?       @map("payment_status") // Status pembayaran dari Midtrans
-  payment         Payment?      @relation("InvoicePayment") // Hapus fields dan references
-  paymentId       Int?          @unique @map("payment_id") // ID unik untuk Payment
+  paymentMethod   String?       @map("payment_method")
+  paymentStatus   String?       @map("payment_status")
+  payment         Payment?      @relation("InvoicePayment")
+  paymentId       Int?          @unique @map("payment_id")
 
   @@index([midtransOrderId], name: "idx_invoice_midtrans_id")
   @@index([userId], name: "idx_invoice_user_id")
@@ -227,10 +229,10 @@ model Refund {
   id        Int      @id @default(autoincrement())
   paymentId Int      @map("payment_id")
   payment   Payment  @relation(fields: [paymentId], references: [id])
-  refundId  String   @unique @map("refund_id") // ID unik untuk refund
-  status    String   @map("status") // Status refund (misalnya pending, success, failed)
+  refundId  String   @unique @map("refund_id")
+  status    String   @map("status")
   amount    Float    @map("amount")
-  reason    String?  @map("reason") // Alasan refund
+  reason    String?  @map("reason")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
 
