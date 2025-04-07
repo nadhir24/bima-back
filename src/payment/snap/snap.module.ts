@@ -5,7 +5,7 @@ import { PrismaService } from 'prisma/prisma.service';
 import { CartModule } from 'src/cart/cart.module';
 import { CatalogModule } from 'src/catalog/catalog.module';
 
-console.log('Initializing SnapModule');
+
 
 @Module({
   controllers: [SnapController],

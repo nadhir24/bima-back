@@ -4,8 +4,6 @@ import { CatalogService } from './catalog.service';
 import { PrismaService } from 'prisma/prisma.service';
 import { SnapModule } from 'src/payment/snap/snap.module';
 
-console.log('Initializing CatalogModule');
-
 @Module({
   controllers: [CatalogController],
   providers: [CatalogService, PrismaService],

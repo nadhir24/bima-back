@@ -6,10 +6,6 @@ import { SnapModule } from './snap/snap.module';
 import { RefundModule } from './refund/refund.module';
 import { CatalogModule } from '../catalog/catalog.module';
 
-console.log('SnapModule:', SnapModule);
-console.log('RefundModule:', RefundModule);
-console.log('CatalogModule:', CatalogModule);
-
 @Module({
   imports: [
     ConfigModule.forRoot({ isGlobal: true }),

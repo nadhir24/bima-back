@@ -72,7 +72,7 @@ export class CartController {
 
   @Post('add')
   async addToCart(@Body() createCartDto: CreateCartDto, @Req() req: Request) {
-    console.log("Received payload:", createCartDto);
+
   
     try {
       const guestId = createCartDto.guestId || req.sessionID;

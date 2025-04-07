@@ -244,7 +244,7 @@ export class CatalogController {
         );
       }
 
-      console.log('Final sizes array before service call:', processedSizes);
+  
 
       if (processedSizes.length === 0) {
         console.error('Update catalog failed: No sizes provided in request');

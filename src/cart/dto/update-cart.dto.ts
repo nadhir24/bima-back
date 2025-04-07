@@ -16,7 +16,6 @@ export class UpdateCartDto {
 
   @IsOptional()
   @Transform(({ value }) => {
-    console.log('Transforming quantity:', value);
     const val = Number(value);
     if (isNaN(val)) {
       console.error('Invalid quantity:', value);

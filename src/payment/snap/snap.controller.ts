@@ -11,6 +11,7 @@ import {
 } from '@nestjs/common';
 import { SnapService } from './snap.service';
 import { PrismaService } from 'prisma/prisma.service';
+import { Response } from 'express';
 
 @Controller('payment/snap')
 export class SnapController {
@@ -43,44 +44,38 @@ export class SnapController {
     }
   }
 
-  /**
-   * Endpoint untuk menangani webhook dari Midtrans.
-   */
-  @Post('webhook')
-  @HttpCode(HttpStatus.OK)
-  async handleWebhook(
-    @Body() body: any,
-    @Headers('X-Callback-Signature') signature: string,
-  ): Promise<any> {
-    try {
-      const result = await this.snapService.handleWebhook(body, signature);
-      return {
-        success: true,
-        data: result,
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
-    }
+ // snap.controller.ts
+@Post('webhook')
+@HttpCode(HttpStatus.OK)
+async handleWebhook(@Body() body: any): Promise<any> {
+  
+  try {
+    const result = await this.snapService.handleWebhook(body); // Signature di-handle di service
+    return {
+      success: true,
+      data: result,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      message: error.message,
+    };
   }
+}
 
-  @Get('redirect/success')
-  @HttpCode(HttpStatus.FOUND)
-  async handleSuccess(@Res() res) {
-    // Use environment variable for redirect URL instead of hardcoded value
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/checkout/sukses`);
-  }
+@Get('redirect/success')
+@HttpCode(HttpStatus.FOUND)
+async handleSuccess(@Query('order_id') orderId: string, @Res() res) {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  return res.redirect(`${frontendUrl}/checkout/sukses?order_id=${orderId}`);
+}
 
-  @Get('redirect/error')
-  @HttpCode(HttpStatus.FOUND)
-  async handleError(@Res() res) {
-    // Use environment variable for redirect URL instead of hardcoded value
-    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-    return res.redirect(`${frontendUrl}/checkout/gagal`);
-  }
+@Get('redirect/error')
+handleError(@Res() res: Response) {
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+  res.redirect(`${frontendUrl}/checkout/gagal`);
+}
+
 
   // Tambahkan endpoint untuk mendapatkan detail order
   @Get('order-detail')
