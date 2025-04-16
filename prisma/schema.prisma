@@ -189,7 +189,9 @@ model Invoice {
   paymentStatus   String?       @map("payment_status")
   payment         Payment?      @relation("InvoicePayment")
   paymentId       Int?          @unique @map("payment_id")
-
+  // Add these fields to track which items need inventory updates
+  catalogId Int?
+  sizeId    Int?
   @@index([midtransOrderId], name: "idx_invoice_midtrans_id")
   @@index([userId], name: "idx_invoice_user_id")
   @@map("invoices")
@@ -204,6 +206,8 @@ model InvoiceItem {
   quantity  Int
   price     Float
   currency  String
+  catalogId Int?    @map("catalog_id")
+  sizeId    Int?    @map("size_id")
 
   @@map("invoice_items")
 }
