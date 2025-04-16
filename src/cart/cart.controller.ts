@@ -97,10 +97,14 @@ export class CartController {
   @Post('add')
   async addToCart(@Body() createCartDto: CreateCartDto, @Req() req: Request) {
     try {
-      // Pastikan guestId selalu ada untuk guest user
-      const guestId = createCartDto.userId
-        ? null
-        : createCartDto.guestId || req.sessionID;
+      // Generate guestId if not provided and user is not logged in
+      let guestId = createCartDto.guestId;
+      if (!createCartDto.userId && !guestId) {
+        guestId = req.sessionID;
+        if (!guestId) {
+          throw new BadRequestException('Session ID is required for guest users');
+        }
+      }
 
       // Validasi input
       if (

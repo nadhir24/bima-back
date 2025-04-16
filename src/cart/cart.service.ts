@@ -4,6 +4,7 @@ import {
   HttpStatus,
   ForbiddenException,
   NotFoundException,
+  BadRequestException,
 } from '@nestjs/common';
 import { PrismaService } from 'prisma/prisma.service';
 import { Prisma } from '@prisma/client';
@@ -17,60 +18,64 @@ export class CartService {
   }
 
   async addToCart(
-    userId: number | null,
+    userId: string | null,
     guestId: string | null,
-    catalogId: number,
-    sizeId: number,
+    catalogId: string,
+    sizeId: string,
     quantity: number,
-  ) {
-    const prisma = this.prisma;
-
-    if (!catalogId || !sizeId) {
-      throw new HttpException('Invalid input data', HttpStatus.BAD_REQUEST);
-    }
-
-    if (quantity > 0) {
-      const size = await prisma.size.findUnique({
-        where: { id: sizeId },
-        include: { catalog: true },
-      });
-
-      if (!size) {
-        throw new HttpException('Size not found', HttpStatus.NOT_FOUND);
+  ): Promise<Cart> {
+    try {
+      // Validasi input
+      if (!catalogId || !sizeId || quantity <= 0) {
+        throw new BadRequestException('Invalid input data');
       }
 
-      const availableQty = size.qty || 0;
-
-      if (availableQty < quantity) {
-        throw new HttpException(
-          `Insufficient stock for ${size.catalog.name} (${size.size}). Available: ${availableQty}`,
-          HttpStatus.BAD_REQUEST,
-        );
+      // Pastikan minimal userId atau guestId ada
+      if (!userId && !guestId) {
+        throw new BadRequestException('Either userId or guestId is required');
       }
 
-      const existingCart = await prisma.cart.findFirst({
+      // Cek apakah item sudah ada di cart
+      const existingCart = await this.prisma.cart.findFirst({
         where: {
+          OR: [
+            { userId: userId || undefined },
+            { guestId: guestId || undefined },
+          ],
           catalogId,
           sizeId,
-          ...(userId ? { userId } : { guestId }),
         },
       });
 
       if (existingCart) {
-        return this.updateCartItem(
-          userId,
-          guestId,
-          existingCart.id,
-          existingCart.quantity + quantity,
-        );
+        // Update quantity jika item sudah ada
+        return this.prisma.cart.update({
+          where: { id: existingCart.id },
+          data: { quantity: existingCart.quantity + quantity },
+          include: {
+            catalog: true,
+            size: true,
+          },
+        });
       }
 
-      const cartItem = await prisma.cart.create({
-        data: { quantity, userId, guestId, catalogId, sizeId },
-        include: { catalog: true, size: true, user: true },
+      // Buat cart item baru
+      return this.prisma.cart.create({
+        data: {
+          userId,
+          guestId,
+          catalogId,
+          sizeId,
+          quantity,
+        },
+        include: {
+          catalog: true,
+          size: true,
+        },
       });
-
-      return cartItem;
+    } catch (error) {
+      console.error('Error in addToCart service:', error);
+      throw error;
     }
   }
 

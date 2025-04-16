@@ -11,7 +11,12 @@ export class UserRoleService {
   ) {}
 
   async getAllRoles() {
-    return this.prisma.role.findMany(); // Ambil semua role dari database
+    const roles = await this.prisma.role.findMany(); // Fetch all roles
+    const roleMap = {};
+    roles.forEach(role => {
+      roleMap[role.id] = role.name; // Create a mapping of roleId to role name
+    });
+    return roleMap; // Return the mapping
   }
   async createRole(createRoleDto: CreateUserRoleDto) {
     return this.prisma.role.create({

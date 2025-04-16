@@ -54,6 +54,7 @@ model Size {
   catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id])
   catalogId Int
   carts     Cart[]  @relation("SizeCarts")
+  invoiceItems InvoiceItem[] // Item invoice yang menggunakan ukuran ini
 
   @@map("sizes")
 }
@@ -208,6 +209,7 @@ model InvoiceItem {
   currency  String
   catalogId Int?    @map("catalog_id")
   sizeId    Int?    @map("size_id")
+  size      Size?   @relation(fields: [sizeId], references: [id])
 
   @@map("invoice_items")
 }

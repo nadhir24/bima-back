@@ -13,6 +13,8 @@ import {
   Patch,
   ParseIntPipe,
   Put,
+  Query,
+  DefaultValuePipe,
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -31,13 +33,8 @@ export class CatalogController {
   // Helper function to generate blurDataURL
   private async generateBlurDataURL(imagePath: string): Promise<string> {
     try {
-      const fullPath = join(
-        process.cwd(),
-        'uploads',
-        'catalog_images',
-        imagePath.split('/').pop(),
-      );
-      const imageBuffer = await sharp(fullPath)
+      console.log(`Generating blurDataURL for: ${imagePath}`); // Log the path being used
+      const imageBuffer = await sharp(imagePath)
         .resize(20) // Small size for blur placeholder
         .toBuffer();
 
@@ -52,6 +49,35 @@ export class CatalogController {
   @Get()
   async findAll(): Promise<Catalog[]> {
     return this.catalogService.findAll();
+  }
+
+  @Get(':id')
+  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Catalog> {
+    console.log('Received GET request for product ID:', id);
+    console.log('Param type:', typeof id);
+    try {
+      const catalogItem = await this.catalogService.findOne(id);
+      console.log('Found product:', catalogItem);
+
+      if (!catalogItem) {
+        throw new HttpException('Catalog item not found', HttpStatus.NOT_FOUND);
+      }
+      return catalogItem;
+    } catch (error) {
+      console.error('Error finding product:', {
+        error: error.message,
+        stack: error.stack
+      });
+      // Handle potential Prisma errors or other issues
+      if (error instanceof HttpException) {
+        throw error; // Re-throw known HTTP exceptions
+      }
+      console.error(`Error fetching catalog with ID ${id}:`, error);
+      throw new HttpException(
+        'Internal server error',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
   @Get('images/:imgpath')
@@ -84,6 +110,7 @@ export class CatalogController {
 
     return catalogItem;
   }
+
   @Post('create')
   @UseInterceptors(
     FileInterceptor('image', {
@@ -127,6 +154,26 @@ export class CatalogController {
         }
       }
 
+      // Parse sizes from formData string
+      let parsedSizes: any[];
+      try {
+        if (typeof formData.sizes !== 'string') {
+          // This case might happen if not using multipart/form-data, but good to check
+           throw new Error('Expected sizes data to be a JSON string.');
+        }
+        parsedSizes = JSON.parse(formData.sizes);
+        if (!Array.isArray(parsedSizes)) {
+          throw new Error('Parsed sizes data is not an array.');
+        }
+      } catch (parseError) {
+        console.error('Error parsing sizes from formData:', parseError);
+        console.error('Received formData.sizes:', formData.sizes);
+        throw new HttpException(
+          `Invalid format for sizes data: ${parseError.message}`,
+          HttpStatus.BAD_REQUEST,
+        );
+      }
+
       const isEnabled = formData.isEnabled === 'true';
       const productSlug = formData.name.toLowerCase().replace(/\s+/g, '-');
       const categorySlug = formData.category.toLowerCase().replace(/\s+/g, '-');
@@ -136,9 +183,9 @@ export class CatalogController {
         category: formData.category,
         categorySlug,
         productSlug,
-        sizes: formData.sizes.map((sizeData) => ({
+        sizes: parsedSizes.map((sizeData) => ({
           size: sizeData.size,
-          price: parseFloat(sizeData.price.replace(/[^d.-]/g, '')).toString(),
+          price: String(parseFloat(String(sizeData.price).replace(/[^\d.-]/g, ''))),
           qty: parseInt(sizeData.qty, 10) || 0,
         })),
         isEnabled,
@@ -162,7 +209,6 @@ export class CatalogController {
       storage: diskStorage({
         destination: join(
           __dirname,
-          '..',
           '..',
           '..',
           '..',
@@ -282,5 +328,14 @@ export class CatalogController {
   @Delete(':id')
   async remove(@Param('id') id: string): Promise<Catalog> {
     return this.catalogService.remove(+id);
+  }
+
+  @Get('products')
+  async getProducts(
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
+    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
+  ) {
+    console.log(`Backend Received - Page: ${page} (Type: ${typeof page}), Limit: ${limit} (Type: ${typeof limit})`); // <-- Add this log
+    return this.catalogService.findAllWithPagination({ page, limit });
   }
 }

@@ -322,4 +322,26 @@ export class CatalogService {
 
     return `Rp${numericPrice.toLocaleString('id-ID')}`;
   }
+
+  async findAllWithPagination(query: { page?: number; limit?: number }) {
+    const page = Number(query.page) || 1;
+    const limit = Number(query.limit) || 10;
+    const skip = (page - 1) * limit;
+
+    const totalProducts = await this.prisma.catalog.count();
+    const products = await this.prisma.catalog.findMany({
+      skip: skip,
+      take: limit,
+      include: {
+        sizes: true, // Include sizes relation
+      },
+    });
+
+    return {
+      products,
+      total: totalProducts,
+      totalPages: Math.ceil(totalProducts / limit),
+      currentPage: page,
+    };
+  }
 }

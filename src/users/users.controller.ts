@@ -29,30 +29,21 @@ export class UsersController {
 
   @Get()
   async getAllUsers() {
-    return await this.usersService.getUsers();
-  }
-  @Post('create')
-  async createUser(@Body() createUserDto: CreateUserDto) {
-    return this.usersService.signUp(createUserDto);
+    return this.usersService.getUsersWithRoles();
   }
 
-  @Put('update/:id')
-  @UseInterceptors(
-    FileInterceptor('photoProfile', {
-      storage: diskStorage({
-        destination: './uploads/image/users',
-        filename(req, file, callback) {
-          const uniqueSuffix = Date.now() + Math.round(Math.random() * 1e9);
-          callback(
-            null,
-            uniqueSuffix + '.' + file.originalname.split('.').pop(),
-          );
-        },
-      }),
-    }),
-  )
+  @Get(':id')
+  async getUserById(@Param('id') id: string) {
+    try {
+      const userId = parseInt(id);
+      return await this.usersService.getUserById(userId);
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.INTERNAL_SERVER_ERROR);
+    }
+  }
+
+  @Put(':id')
   async updateUser(
-    @Req() req: Request,
     @Param('id') id: string,
     @Body() updateUserDto: UpdateUserDto,
     @UploadedFile(
@@ -89,18 +80,22 @@ export class UsersController {
       finalImageUrl = oldImage;
     }
 
-    await this.usersService.updateUser(+id, {
+    // Capture the response from the service
+    const serviceResponse = await this.usersService.updateUser(+id, {
       ...updateUserDto,
       photoProfile: finalImageUrl,
     });
 
-    return {
-      statusCode: HttpStatus.OK,
-      message: 'User updated successfully',
-    };
+    // Return the full service response
+    return serviceResponse;
   }
   @Delete('delete/:id')
   async deleteUser(@Param('id') id: string) {
-    return await this.usersService.deleteUser(+id);
+    try {
+      const userId = parseInt(id);
+      return await this.usersService.deleteUser(userId);
+    } catch (error) {
+      throw new HttpException(error.message, HttpStatus.BAD_REQUEST);
+    }
   }
 }
