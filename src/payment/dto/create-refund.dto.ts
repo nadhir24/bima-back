@@ -3,20 +3,17 @@ import { IsNotEmpty, IsNumber, IsString, IsOptional, IsEnum } from 'class-valida
 export class CreateRefundDto {
     @IsNotEmpty()
     @IsString()
-    paymentId: string; // Payment ID yang akan di-refund (dari parameter endpoint)
-
+    paymentId: string;
+    
     @IsNotEmpty()
     @IsNumber()
     amount: number;
 
     @IsNotEmpty()
     @IsString()
-    reason: string; // Alasan Refund (wajib diisi)
+    reason: string; 
 
     @IsOptional()
     @IsString()
-    external_id?: string; // Tambahkan external_id (opsional)
-
-
-    // ... tambahkan validasi lain sesuai kebutuhan payload Refund Xendit ...
+    external_id?: string;
 }

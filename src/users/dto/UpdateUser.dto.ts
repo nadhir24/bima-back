@@ -27,9 +27,8 @@ export class UpdateUserDto {
   @IsString()
   readonly photoProfile?: string;
 
-  // Address fields
   @IsOptional()
-  readonly addressId?: number; // ID address untuk update
+  readonly addressId?: number; 
 
   @IsOptional()
   @IsString()
@@ -41,13 +40,13 @@ export class UpdateUserDto {
 
   @IsOptional()
   @IsString()
-  readonly address_province?: string; // di Prisma = "state"
+  readonly address_province?: string; 
 
   @IsOptional()
   @IsString()
-  readonly address_postalCode?: string; // Tambahan agar sesuai dengan Prisma
+  readonly address_postalCode?: string;
 
   @IsOptional()
   @IsString()
-  readonly address_country?: string; // Tambahan agar sesuai dengan Prisma
+  readonly address_country?: string;
 }

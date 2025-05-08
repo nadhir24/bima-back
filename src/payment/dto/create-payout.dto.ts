@@ -1,7 +1,6 @@
 import { IsNotEmpty, IsNumber, IsString, IsOptional, IsEnum, IsEmail, ValidateNested } from 'class-validator';
 import { Type } from 'class-transformer';
 
-// 1. CreatePayoutBankDto (DEKLARASIKAN PALING ATAS)
 export class CreatePayoutBankDto {
     @IsNotEmpty()
     @IsString()
@@ -33,7 +32,6 @@ export class CreatePayoutBankDto {
 }
 
 
-// 2. CreatePayoutDto (DEKLARASIKAN SETELAH CreatePayoutBankDto)
 export class CreatePayoutDto {
     @IsNotEmpty()
     @IsNumber()
@@ -50,7 +48,7 @@ export class CreatePayoutDto {
 
     @IsNotEmpty()
     @ValidateNested()
-    @Type(() => CreatePayoutBankDto) // <--- Sekarang CreatePayoutBankDto SUDAH DIDEKLARASIKAN
+    @Type(() => CreatePayoutBankDto) 
     bank_account: CreatePayoutBankDto;
 
     @IsOptional()

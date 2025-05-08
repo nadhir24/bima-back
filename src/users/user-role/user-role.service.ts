@@ -9,16 +9,15 @@ export class UserRoleService {
   constructor(
     private prisma: PrismaService,
     private jwtService: JwtService,
-    // private mailService: MailService,
   ) {}
 
   async getAllRoles() {
-    const roles = await this.prisma.role.findMany(); // Fetch all roles
+    const roles = await this.prisma.role.findMany(); 
     const roleMap = {};
     roles.forEach((role) => {
-      roleMap[role.id] = role.name; // Create a mapping of roleId to role name
+      roleMap[role.id] = role.name; 
     });
-    return roleMap; // Return the mapping
+    return roleMap; 
   }
   async createRole(createRoleDto: CreateUserRoleDto) {
     return this.prisma.role.create({
@@ -40,11 +39,9 @@ export class UserRoleService {
 
   async updateUserRole(userId: number, newRoleId: number) {
     try {
-      // Pastikan userId dan newRoleId adalah angka
       const numericUserId = Number(userId);
       const numericRoleId = Number(newRoleId);
 
-      // Validasi tambahan jika konversi gagal
       if (isNaN(numericUserId) || isNaN(numericRoleId)) {
         console.error(
           `Invalid conversion: userId=${userId}, newRoleId=${newRoleId}`,
@@ -58,23 +55,19 @@ export class UserRoleService {
 
       const updatedRole = await this.prisma.userRole.updateMany({
         where: {
-          userId: numericUserId, // Gunakan userId yang sudah pasti angka
+          userId: numericUserId, 
         },
         data: {
-          roleId: numericRoleId, // Gunakan roleId yang sudah pasti angka
+          roleId: numericRoleId, 
         },
       });
 
-      // Check if any record was actually updated
       if (updatedRole.count === 0) {
-        // Handle the case where the user ID might not exist
         console.warn(
           `No user role found for userId: ${numericUserId} to update.`,
         );
-        // return { statusCode: 404, message: 'User not found or role already set' }; // Opsional: Kembalikan 404
       }
 
-      // Mendapatkan data user terbaru setelah update role
       const updatedUser = await this.prisma.user.findUnique({
         where: { id: numericUserId },
         include: {
@@ -91,7 +84,6 @@ export class UserRoleService {
         throw new Error('User not found after role update');
       }
 
-      // Generate token baru dengan data role terbaru
       const token = this.jwtService.sign(
         {
           id: updatedUser.id,
@@ -105,13 +97,12 @@ export class UserRoleService {
         { secret: process.env.JWT_SECRET_KEY, expiresIn: '6h' },
       );
 
-      console.log('Generated new token with updated role');
 
       return {
         statusCode: 200,
         message: 'Role berhasil diperbarui',
         updatedCount: updatedRole.count,
-        token: token, // Token baru dengan informasi role terbaru
+        token: token, 
         userData: {
           id: updatedUser.id,
           fullName: updatedUser.fullName,
@@ -123,7 +114,7 @@ export class UserRoleService {
         },
       };
     } catch (error: any) {
-      console.error('Error updating user role:', error); // Log error detail
+      console.error('Error updating user role:', error); 
       return {
         statusCode: 500,
         message: 'Terjadi kesalahan saat memperbarui role',

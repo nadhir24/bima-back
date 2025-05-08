@@ -7,40 +7,38 @@ export class CreatePaymentRequestDto {
 
     @IsNotEmpty()
     @IsString()
-    @IsEnum(['IDR', 'USD']) // Validasi enum untuk currency, tambahkan mata uang lain jika perlu
+    @IsEnum(['IDR', 'USD']) 
     currency: string;
 
     @IsOptional()
     @IsString()
-    external_id?: string; // Tambahkan external_id
+    external_id?: string; 
 
     @IsOptional()
     @IsUrl()
-    success_redirect_url?: string; // Tambahkan success_redirect_url, validasi URL
+    success_redirect_url?: string;
 
     @IsOptional()
     @IsUrl()
-    failure_redirect_url?: string; // Tambahkan failure_redirect_url, validasi URL
+    failure_redirect_url?: string; 
 
     @IsOptional()
     @IsString()
-    description?: string; // Tambahkan description
+    description?: string; 
 
     @IsOptional()
     @IsString()
-    customer_id?: string; // Tambahkan customer_id
+    customer_id?: string; 
 
     @IsOptional()
-    @IsEnum(['BANK_TRANSFER', 'CREDIT_CARD', 'EWALLET', 'RETAIL_OUTLET', 'DIRECT_DEBIT']) // Contoh enum kategori metode pembayaran
-    payment_method_categories?: string[]; // Tambahkan payment_method_categories (gunakan string array untuk enum)
+    @IsEnum(['BANK_TRANSFER', 'CREDIT_CARD', 'EWALLET', 'RETAIL_OUTLET', 'DIRECT_DEBIT']) 
+    payment_method_categories?: string[]; 
 
     @IsOptional()
-    @IsString({ each: true }) // Validasi setiap item dalam array harus string
-    payment_methods?: string[]; // Tambahkan payment_methods (gunakan string array)
+    @IsString({ each: true }) 
+    payment_methods?: string[]; 
 
     @IsOptional()
     @IsNumber()
-    invoice_duration?: number; // Tambahkan invoice_duration
-
-    // ... tambahkan validasi lain sesuai kebutuhan payload Payment Request Xendit ...
+    invoice_duration?: number; 
 }

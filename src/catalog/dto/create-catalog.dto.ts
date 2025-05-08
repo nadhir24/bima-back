@@ -19,7 +19,6 @@ class SizeDto {
   price: string;
 
   @Transform(({ value }) => {
-    // If the value is a string, try to convert it to a number
     if (typeof value === 'string') {
       const parsed = parseInt(value, 10);
       return isNaN(parsed) ? 0 : parsed;
@@ -28,7 +27,7 @@ class SizeDto {
   })
   @IsNumber()
   @IsOptional()
-  qty: number = 0;  // Default to 0 if not provided
+  qty: number = 0; 
 }
 
 export class CreateCatalogDto {
@@ -38,7 +37,7 @@ export class CreateCatalogDto {
 
   @IsString()
   @IsOptional()
-  blurDataURL?: string = '';  // Default empty string
+  blurDataURL?: string = ''; 
 
   @IsString()
   @IsNotEmpty()
@@ -55,7 +54,7 @@ export class CreateCatalogDto {
     return !!value;
   })
   @IsBoolean()
-  isEnabled: boolean = true;  // Default to true
+  isEnabled: boolean = true;  
 
   @IsString()
   @IsOptional()

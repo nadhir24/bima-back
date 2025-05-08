@@ -13,8 +13,8 @@ import { CartModule } from 'src/cart/cart.module';
   controllers: [CatalogController],
   providers: [CatalogService, PrismaService],
   imports: [
-    forwardRef(() => SnapModule), // Resolve circular dependency with SnapModule
-    forwardRef(() => CartModule), // Add CartModule to resolve circular dependency
+    forwardRef(() => SnapModule), 
+    forwardRef(() => CartModule), 
     MulterModule.register({
       storage: diskStorage({
         destination: (req, file, cb) => {
@@ -25,14 +25,12 @@ import { CartModule } from 'src/cart/cart.module';
           cb(null, uploadPath);
         },
         filename: (req, file, cb) => {
-          // Use original name with timestamp to avoid overwriting
           const uniqueSuffix = Date.now();
           const fileName = `${file.originalname.replace(/\s+/g, '_')}-${uniqueSuffix}${extname(file.originalname)}`;
           cb(null, fileName);
         },
       }),
       fileFilter: (req, file, cb) => {
-        // Allow only images
         if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
           return cb(new Error('Only image files are allowed!'), false);
         }

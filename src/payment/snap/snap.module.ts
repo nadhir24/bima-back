@@ -11,9 +11,9 @@ import { CatalogModule } from 'src/catalog/catalog.module';
   controllers: [SnapController],
   providers: [SnapService, PrismaService],
   imports: [
-    forwardRef(() => CartModule),   // Resolve circular dependency with CartModule
-    forwardRef(() => CatalogModule),  // Resolve circular dependency with CatalogModule
+    forwardRef(() => CartModule),   
+    forwardRef(() => CatalogModule),  
   ],
-  exports: [SnapService], // Export SnapService for use by modules that import SnapModule
+  exports: [SnapService], 
 })
 export class SnapModule {}

@@ -1,4 +1,12 @@
-import { Controller, Get, Req, UseGuards, Query, HttpException, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Req,
+  UseGuards,
+  Query,
+  HttpException,
+  HttpStatus,
+} from '@nestjs/common';
 import { PaymentService } from './payment.service';
 
 @Controller('payment')
@@ -14,7 +22,7 @@ export class PaymentController {
   async getUserInvoices(
     @Query('userId') userId: string,
     @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10'
+    @Query('limit') limit: string = '10',
   ) {
     const userIdNum = parseInt(userId, 10);
     if (isNaN(userIdNum)) {
@@ -29,7 +37,7 @@ export class PaymentController {
   async getGuestInvoices(
     @Query('guestId') guestId: string,
     @Query('page') page: string = '1',
-    @Query('limit') limit: string = '10'
+    @Query('limit') limit: string = '10',
   ) {
     if (!guestId) {
       throw new HttpException('Guest ID is required', HttpStatus.BAD_REQUEST);
@@ -46,28 +54,18 @@ export class PaymentController {
     @Query('search') search?: string,
     @Query('status') status?: string,
     @Query('startDate') startDate?: string,
-    @Query('endDate') endDate?: string
+    @Query('endDate') endDate?: string,
   ) {
     const pageNum = parseInt(page, 10) || 1;
     const limitNum = parseInt(limit, 10) || 10;
-    
-    // Log the parameters to help with debugging
-    console.log('Admin invoice query params:', {
-      page: pageNum,
-      limit: limitNum, 
-      search, 
-      status, 
-      startDate, 
-      endDate
-    });
-    
+
     return this.paymentService.getAllInvoices(
-      pageNum, 
-      limitNum, 
-      search, 
-      status, 
-      startDate, 
-      endDate
+      pageNum,
+      limitNum,
+      search,
+      status,
+      startDate,
+      endDate,
     );
   }
-} 
+}

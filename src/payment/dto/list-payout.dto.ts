@@ -7,7 +7,7 @@ export class ListPayoutsDto {
 
     @IsOptional()
     @IsString()
-    @IsEnum(['IDR', 'USD']) // Validasi enum currency, sesuaikan daftar mata uang yang didukung
+    @IsEnum(['IDR', 'USD']) 
     currency?: string;
 
     @IsOptional()
@@ -16,20 +16,19 @@ export class ListPayoutsDto {
 
     @IsOptional()
     @IsString()
-    bank_code?: string; // Tambahkan filter bank_code
+    bank_code?: string;
 
     @IsOptional()
     @IsString()
-    account_holder_name?: string; // Tambahkan filter account_holder_name
+    account_holder_name?: string;
 
     @IsOptional()
     @IsString()
-    created_gte?: string; // Tambahkan filter tanggal created (>=)
+    created_gte?: string; 
 
     @IsOptional()
     @IsString()
-    created_lte?: string; // Tambahkan filter tanggal created (<=)
+    created_lte?: string; 
 
 
-    // ... tambahkan query params lain sesuai kebutuhan API Xendit ...
 }

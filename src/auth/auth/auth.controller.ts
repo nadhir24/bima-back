@@ -7,7 +7,7 @@ import {
   Req,
   Res,
   HttpStatus,
-  HttpCode
+  HttpCode,
 } from '@nestjs/common';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
@@ -26,14 +26,11 @@ export class AuthController {
   @Post('signup')
   @HttpCode(HttpStatus.CREATED)
   async signup(@Body() createUserDto: CreateUserDto) {
-    console.log('Signup request received:', createUserDto);
     try {
       const result = await this.authService.signup(createUserDto);
-      console.log('Signup successful:', result);
       return result;
     } catch (error) {
-      console.error('Signup error in controller:', error);
-      throw error; // Re-throw the error to be handled by global filters
+      throw error;
     }
   }
 
@@ -46,54 +43,43 @@ export class AuthController {
   @UseGuards(JwtAuthGuard)
   @Get('verify')
   async verifyToken(@Req() req) {
-    console.log('Verifying token for user:', req.user?.id);
-    
-    // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return {
         valid: false,
-        message: 'Authorization header missing or invalid format'
+        message: 'Authorization header missing or invalid format',
       };
     }
-    
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    
-    // Call verifyTokenRole dengan user ID dari token dan token itu sendiri
+
+    const token = authHeader.substring(7);
     return this.authService.verifyTokenRole(req.user.id, token);
   }
 
   @Post('verify')
   async verifyTokenRole(@Body() body: { userId: number }, @Req() req: any) {
-    console.log('Verify token role for user', body.userId);
-    // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return {
         valid: false,
-        message: 'Authorization header missing or invalid format'
+        message: 'Authorization header missing or invalid format',
       };
     }
-    
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
+
+    const token = authHeader.substring(7);
     return this.authService.verifyTokenRole(body.userId, token);
   }
-  
+
   @Get('verify-token')
   async verifyTokenWithQuery(@Req() req) {
-    console.log('Verify token from query params');
-    // Extract token from Authorization header
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
       return {
         valid: false,
-        message: 'Authorization header missing or invalid format'
+        message: 'Authorization header missing or invalid format',
       };
     }
-    
-    const token = authHeader.substring(7); // Remove 'Bearer ' prefix
-    
-    // Call the auth service to verify and extract user ID from token
+
+    const token = authHeader.substring(7);
     return this.authService.extractAndVerifyToken(token);
   }
 }

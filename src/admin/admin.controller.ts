@@ -1,7 +1,15 @@
-import { Controller, Get, Param, Patch, Body, Query, BadRequestException } from '@nestjs/common';
-import { AdminService } from './admin.service'; // Buat AdminService nanti
+import {
+  Controller,
+  Get,
+  Param,
+  Patch,
+  Body,
+  Query,
+  BadRequestException,
+} from '@nestjs/common';
+import { AdminService } from './admin.service'; 
 
-@Controller('admin') // URL path untuk endpoint admin orders
+@Controller('admin') 
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 
@@ -11,36 +19,40 @@ export class AdminController {
   }
 
   @Get('orders')
-  getOrders(@Query() query: { 
-    page?: number; 
-    limit?: number; 
-    status?: string;
-    search?: string;
-    startDate?: string;
-    endDate?: string;
-  }) {
+  getOrders(
+    @Query()
+    query: {
+      page?: number;
+      limit?: number;
+      status?: string;
+      search?: string;
+      startDate?: string;
+      endDate?: string;
+    },
+  ) {
     return this.adminService.getAllOrders(query);
   }
 
   @Get('orders/:orderId')
   async getOrderById(@Param('orderId') orderId: string) {
     try {
-      console.log('Received orderId:', orderId);
       const numericOrderId = Number(orderId);
-      
+
       if (isNaN(numericOrderId)) {
         throw new BadRequestException('Invalid order ID format');
       }
-      
+
       return await this.adminService.getOrderById(numericOrderId);
     } catch (error) {
-      console.error('Error in controller getOrderById:', error);
       throw error;
     }
   }
 
   @Patch('orders/:orderId/status')
-  updateOrderStatus(@Param('orderId') orderId: string, @Body('status') status: string) {
+  updateOrderStatus(
+    @Param('orderId') orderId: string,
+    @Body('status') status: string,
+  ) {
     return this.adminService.updateOrderStatus(Number(orderId), status);
   }
 }

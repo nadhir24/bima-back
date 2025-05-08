@@ -7,19 +7,19 @@ export class ListRefundsDto {
 
     @IsOptional()
     @IsString()
-    payment_id?: string; // Tambahkan filter payment_id
+    payment_id?: string; 
 
     @IsOptional()
     @IsString()
-    external_id?: string; // Tambahkan filter external_id
+    external_id?: string; 
 
     @IsOptional()
     @IsString()
-    created_gte?: string; // Tambahkan filter tanggal created (>=)
+    created_gte?: string; 
 
     @IsOptional()
     @IsString()
-    created_lte?: string; // Tambahkan filter tanggal created (<=)
+    created_lte?: string; 
 
 
 }

@@ -7,31 +7,30 @@ export class ListPaymentRequestsDto {
 
     @IsOptional()
     @IsString()
-    @IsEnum(['IDR', 'USD']) // Validasi enum currency, sesuaikan daftar mata uang yang didukung
+    @IsEnum(['IDR', 'USD']) 
     currency?: string;
 
     @IsOptional()
     @IsString()
-    external_id?: string; // Tambahkan external_id sebagai query param
+    external_id?: string; 
 
     @IsOptional()
     @IsString()
-    customer_id?: string; // Tambahkan customer_id sebagai query param
+    customer_id?: string; 
 
     @IsOptional()
     @IsString()
-    payment_method?: string; // Tambahkan payment_method sebagai query param
+    payment_method?: string; 
 
     @IsOptional()
     @IsString()
-    payment_method_category?: string; // Tambahkan payment_method_category sebagai query param
+    payment_method_category?: string; 
+    @IsOptional()
+    @IsString()
+    created_gte?: string; 
 
     @IsOptional()
     @IsString()
-    created_gte?: string; // Tambahkan filter tanggal created (>=)
-
-    @IsOptional()
-    @IsString()
-    created_lte?: string; // Tambahkan filter tanggal created (<=)
+    created_lte?: string; 
 
 }

@@ -14,20 +14,9 @@ export class AuthService {
     private readonly prisma: PrismaService,
   ) {}
   
-  // Menggunakan satu metode login saja
   async login(loginDto: LoginDto) {
     try {
-        // Cek apakah nomor telepon sudah terdaftar
-  // const existingnumber = await this.prisma.user.findUnique({
-  //   where: { phoneNumber: loginDto.phoneNumber },
-  // });
-
-  // if (existingUser) {
-  //   throw new HttpException(
-  //     'Phone number already in use',
-  //     HttpStatus.BAD_REQUEST,
-  //   );
-  // }
+       
 
       const user = await this.prisma.user.findUnique({
         where: { email: loginDto.email },
@@ -62,7 +51,7 @@ export class AuthService {
           roleId: user.userRoles,
           photoProfile: user.photoProfile,
         },
-        { secret: process.env.JWT_SECRET_KEY, expiresIn: '1h' }, // Expire token 1 jam
+        { secret: process.env.JWT_SECRET_KEY, expiresIn: '1h' }, 
       );
   
       return { statusCode: HttpStatus.OK, token: token, loginData: loginData };
@@ -71,14 +60,11 @@ export class AuthService {
     }
   }
   
-  // Validasi user untuk autentikasi JWT
   async validateUser(email: string, pass: string): Promise<any> {
-    // Validasi email dan password tidak kosong
     if (!email || !pass) {
       throw new UnauthorizedException('Email and password are required');
     }
   
-    // Cari user berdasarkan email
     const user = await this.prisma.user.findUnique({
       where: { email },
       include: { userPassword: true },
@@ -88,13 +74,11 @@ export class AuthService {
       throw new UnauthorizedException('User not found');
     }
   
-    // Cek apakah password cocok
     const isPasswordValid = await bcrypt.compare(pass, user.userPassword.passwordHash);
     if (!isPasswordValid) {
       throw new UnauthorizedException('Invalid password');
     }
   
-    // Hapus password hash dari hasil yang dikembalikan
     const { passwordHash, ...result } = user.userPassword;
     return { ...user, ...result };
   }

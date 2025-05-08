@@ -22,7 +22,7 @@ export class AuthController {
     return this.usersService.signUp(createUserDto);
   }
 
-  @UseGuards(JwtMiddleware)  // Guard untuk proteksi endpoint yang membutuhkan autentikasi
+  @UseGuards(JwtMiddleware)  
   @Post('profile')
   getProfile(@Body() body: any) {
     return { message: 'Authenticated!', data: body };

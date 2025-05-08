@@ -11,7 +11,7 @@ import { existsSync, mkdirSync } from 'fs';
 import { extname, join } from 'path';
 
 @Module({
-  providers: [UsersService, PrismaService], // Daftarkan UsersService di sini
+  providers: [UsersService, PrismaService], 
   controllers: [UsersController],
   exports:[UsersService],
   imports: [
@@ -28,21 +28,19 @@ import { extname, join } from 'path';
           cb(null, uploadPath);
         },
         filename: (req, file, cb) => {
-          // Use original name with timestamp to avoid overwriting
           const uniqueSuffix = Date.now();
           const fileName = `${file.originalname.replace(/\s+/g, '_')}-${uniqueSuffix}${extname(file.originalname)}`;
           cb(null, fileName);
         },
       }),
       fileFilter: (req, file, cb) => {
-        // Allow only images
         if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
           return cb(new Error('Only image files are allowed!'), false);
         }
         cb(null, true);
       },
       limits: {
-        fileSize: 2 * 1024 * 1024, // 2MB
+        fileSize: 2 * 1024 * 1024, 
       },
     }),
   ]

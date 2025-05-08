@@ -14,7 +14,6 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
   }
 
   async validate(payload: any) {
-    // Use id from payload, fallback to sub if id is missing
     const userId = payload.id || payload.sub;
     
     if (!userId) {

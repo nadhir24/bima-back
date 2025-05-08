@@ -26,57 +26,32 @@ export class SnapController {
     private readonly prisma: PrismaService,
   ) {}
 
-  /**
-   * Endpoint untuk membuat transaksi baru.
-   */
   @Post('create-transaction')
   @HttpCode(HttpStatus.OK)
   async createTransaction(
-    @Body() payload: any, // Payload now contains userId OR guestId
-    @Req() req: Request, 
+    @Body() payload: any, 
+    @Req() req: Request,
   ): Promise<any> {
     try {
-      console.log('🔍 Request payload:', payload);
-      // console.log('👤 Request user:', req.user); // req.user might be null for guests
-
-      // Extract userId and guestId from the payload sent by frontend
-      const userId = payload.userId || null; 
+      const userId = payload.userId || null;
       const guestId = payload.guestId || null;
-      
-      console.log(`👤 Processing transaction for - UserID: ${userId}, GuestID: ${guestId}`);
 
-      // Pass both userId and guestId to the service
       const transaction = await this.snapService.createTransaction(
         userId,
-        guestId, // Pass guestId
-        payload, // Pass the rest of the payload for details like items, total etc.
-        payload.shippingAddress
+        guestId,
+        payload,
+        payload.shippingAddress,
       );
-
-      console.log('✅ Transaction created:', {
-        identifier: userId ? `User ${userId}` : `Guest ${guestId}`,
-        orderId: transaction.invoice?.midtransOrderId,
-        amount: transaction.invoice?.amount
-      });
 
       return {
         success: true,
         data: transaction,
       };
     } catch (error) {
-      console.error('❌ Error creating transaction in controller:', {
-        error: error.message,
-        stack: error.stack,
-        userId: payload.userId,
-        guestId: payload.guestId
-      });
-
-      // Re-throw the error or return a more specific error response
-      // throw new InternalServerErrorException(error.message || 'Failed to create transaction');
-       return {
+      return {
         success: false,
         message: error.message || 'Failed to create transaction',
-        statusCode: error.status || 500
+        statusCode: error.status || 500,
       };
     }
   }
@@ -85,7 +60,7 @@ export class SnapController {
   @HttpCode(HttpStatus.OK)
   async handleWebhook(@Body() body: any): Promise<any> {
     try {
-      const result = await this.snapService.handleWebhook(body); // Signature di-handle di service
+      const result = await this.snapService.handleWebhook(body); 
       return {
         success: true,
         data: result,
@@ -173,7 +148,6 @@ export class SnapController {
     }
   }
 
-  // Tambahkan endpoint untuk cek order guest
   @Get('guest-order')
   async getGuestOrder(
     @Query('orderId') orderId: string,
@@ -183,12 +157,12 @@ export class SnapController {
       const invoice = await this.prisma.invoice.findFirst({
         where: {
           midtransOrderId: orderId,
-          user: null, // Pastikan ini adalah order guest
+          user: null, 
         },
         include: {
           items: true,
-          payment: true
-        }
+          payment: true,
+        },
       });
 
       if (!invoice) {
@@ -207,7 +181,7 @@ export class SnapController {
           currency: invoice.currency,
           createdAt: invoice.createdAt,
           items: invoice.items,
-          payment: invoice.payment
+          payment: invoice.payment,
         },
       };
     } catch (error) {

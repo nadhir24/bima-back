@@ -14,7 +14,6 @@ import {
   NotFoundException,
   BadRequestException,
   ValidationPipe,
-  HttpException,
   HttpStatus,
 } from '@nestjs/common';
 import { CartService } from './cart.service';
@@ -50,7 +49,7 @@ export class CartController {
     };
   }
   @Get()
-  async findAllCart(){
+  async findAllCart() {
     return this.cartService.FindAllCart();
   }
 
@@ -61,12 +60,14 @@ export class CartController {
     @Req() req?: Request,
   ) {
     let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
-    const guestId = !userId ? (guestIdQuery || req?.sessionID) : null;
+    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
 
-    if (!userId && !guestId) { return 'Rp0'; }
+    if (!userId && !guestId) {
+      return 'Rp0';
+    }
 
     const totalNumber = await this.cartService.getCartTotal(userId, guestId);
-    
+
     const formattedTotal = `Rp${totalNumber.toLocaleString('id-ID')}`;
 
     return formattedTotal;
@@ -100,16 +101,16 @@ export class CartController {
   @Post('add')
   async addToCart(@Body() createCartDto: CreateCartDto, @Req() req: Request) {
     try {
-      // Generate guestId if not provided and user is not logged in
       let guestId = createCartDto.guestId;
       if (!createCartDto.userId && !guestId) {
         guestId = req.sessionID;
         if (!guestId) {
-          throw new BadRequestException('Session ID is required for guest users');
+          throw new BadRequestException(
+            'Session ID is required for guest users',
+          );
         }
       }
 
-      // Validasi input
       if (
         !createCartDto.catalogId ||
         !createCartDto.sizeId ||
@@ -131,8 +132,6 @@ export class CartController {
         data: this.formatCartResponse(cart),
       };
     } catch (error) {
-      console.error('Error in addToCart:', error);
-
       return {
         success: false,
         message:
@@ -148,7 +147,7 @@ export class CartController {
     @Param('cartId', ParseIntPipe) cartId: number,
     @Body(new ValidationPipe({ transform: true })) updateCartDto: UpdateCartDto,
     @Req() req: Request,
-    @Query('guestId') guestIdParam?: string
+    @Query('guestId') guestIdParam?: string,
   ) {
     try {
       if (!cartId) throw new BadRequestException('Cart ID is required');
@@ -156,9 +155,8 @@ export class CartController {
         throw new BadRequestException('Quantity is required for update.');
 
       const userId = updateCartDto.userId || null;
-      const guestId = !userId && guestIdParam ? guestIdParam : (!userId ? req.sessionID : null);
-
-      console.log(`Updating cart item ${cartId}. UserID: ${userId}, GuestID (used): ${guestId}, GuestID (param): ${guestIdParam}, GuestID (session): ${req.sessionID}`);
+      const guestId =
+        !userId && guestIdParam ? guestIdParam : !userId ? req.sessionID : null;
 
       const result = await this.cartService.updateCartItem(
         userId,
@@ -170,9 +168,9 @@ export class CartController {
       if ('message' in result && 'deletedItem' in result) {
         return {
           success: true,
-          data: { 
+          data: {
             ...this.formatCartResponse(result.deletedItem),
-            message: result.message
+            message: result.message,
           },
         };
       } else {
@@ -182,14 +180,13 @@ export class CartController {
         };
       }
     } catch (error) {
-      console.error('Controller error during update:', error);
       return {
         success: false,
         message:
           error.response?.message ||
           error.message ||
           'Failed to update cart item',
-         statusCode: error.status || 500
+        statusCode: error.status || 500,
       };
     }
   }
@@ -199,7 +196,7 @@ export class CartController {
     @Param('cartId', ParseIntPipe) cartId: number,
     @Req() req: Request,
     @Query('userId') userIdParam?: string,
-    @Query('guestId') guestIdParam?: string
+    @Query('guestId') guestIdParam?: string,
   ) {
     try {
       let userId: number | null = null;
@@ -208,23 +205,25 @@ export class CartController {
       } else if (req.user && 'id' in req.user) {
         userId = (req.user as any).id;
       }
-      
-      const guestId = !userId && guestIdParam ? guestIdParam : (!userId ? req.sessionID : null);
-      
-      console.log(`Deleting cart item ${cartId}. UserID: ${userId}, GuestID (used): ${guestId}, GuestID (param): ${guestIdParam}, GuestID (session): ${req.sessionID}`);
-      
-      const result = await this.cartService.removeCartItem(userId, guestId, cartId);
+
+      const guestId =
+        !userId && guestIdParam ? guestIdParam : !userId ? req.sessionID : null;
+
+      const result = await this.cartService.removeCartItem(
+        userId,
+        guestId,
+        cartId,
+      );
       return {
         success: true,
         message: result.message,
-        data: this.formatCartResponse(result.deletedItem)
+        data: this.formatCartResponse(result.deletedItem),
       };
     } catch (error) {
-      console.error('Controller error during delete:', error);
       return {
         success: false,
         message: error.message || 'Failed to remove cart item',
-        statusCode: error.status || 500
+        statusCode: error.status || 500,
       };
     }
   }
@@ -254,10 +253,10 @@ export class CartController {
     @Req() req?: Request,
   ) {
     let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
-    const guestId = !userId ? (guestIdQuery || req?.sessionID) : null;
+    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
 
     if (!userId && !guestId) {
-       return { count: 0 };
+      return { count: 0 };
     }
 
     const count = await this.cartService.getCartItemCount(userId, guestId);
@@ -266,56 +265,50 @@ export class CartController {
 
   @Get('findMany')
   async findManyCartsEndpoint(
-       @Query('userId') userIdQuery?: string,
-       @Query('guestId') guestIdQuery?: string,
-       @Req() req?: Request
-   ) {
-      let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
-      // Ensure guestId is only used if userId is null
-      const guestId = !userId ? (guestIdQuery || req?.sessionID) : null;
+    @Query('userId') userIdQuery?: string,
+    @Query('guestId') guestIdQuery?: string,
+    @Req() req?: Request,
+  ) {
+    let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
+    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
 
-      // If neither identifier exists, return empty array
-      if (!userId && !guestId) { return []; }
+    if (!userId && !guestId) {
+      return [];
+    }
 
-      // Construct the correct where clause
-      const whereClause = userId ? { userId: userId } : { guestId: guestId };
+    const whereClause = userId ? { userId: userId } : { guestId: guestId };
 
-      console.log(`[CartController] Calling findManyCarts with WHERE: ${JSON.stringify(whereClause)}`); // Optional: Log for verification
-
-      const carts = await this.cartService.findManyCarts({
-          where: whereClause, // Use the correctly constructed where clause
-          include: { user: true, catalog: true, size: true },
-          orderBy: { createdAt: 'asc' } // Add sorting by creation time
-      });
-      return carts.map((cart) => this.formatCartResponse(cart));
+    const carts = await this.cartService.findManyCarts({
+      where: whereClause,
+      include: { user: true, catalog: true, size: true },
+      orderBy: { createdAt: 'asc' },
+    });
+    return carts.map((cart) => this.formatCartResponse(cart));
   }
 
-  /**
-   * Admin endpoint to remove all cart items for a specific catalog (product)
-   * This is useful for admins who need to delete a product
-   */
   @Delete('admin/remove-all-by-catalog/:catalogId')
   async removeAllCartItemsByCatalog(
-    @Param('catalogId', ParseIntPipe) catalogId: number
+    @Param('catalogId', ParseIntPipe) catalogId: number,
   ) {
     try {
       if (!catalogId) {
         throw new BadRequestException('Catalog ID is required');
       }
-      
-      const result = await this.cartService.removeAllCartItemsByCatalogId(catalogId);
-      
+
+      const result =
+        await this.cartService.removeAllCartItemsByCatalogId(catalogId);
+
       return {
         success: true,
         message: result.message,
-        count: result.count
+        count: result.count,
       };
     } catch (error) {
-      console.error('Error removing all cart items for catalog:', error);
       return {
         success: false,
-        message: error.message || 'Failed to remove cart items for this product',
-        statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR
+        message:
+          error.message || 'Failed to remove cart items for this product',
+        statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
       };
     }
   }

@@ -67,11 +67,9 @@ export class AppModule {
       .apply(JwtMiddleware)
       .forRoutes(
         { path: 'users', method: RequestMethod.GET },
-        // { path: 'catalog', method: RequestMethod.GET },
         { path: 'admin', method: RequestMethod.GET },
         { path: 'dashboard', method: RequestMethod.GET },
         UsersController,
-        // CatalogController,
       );
   }
 }

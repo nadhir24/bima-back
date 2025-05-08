@@ -13,9 +13,9 @@ import { PrismaModule } from 'prisma/prisma.module';
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET_KEY,
-      signOptions: { expiresIn: '6h' }, // Token expired dalam 6 jam
+        signOptions: { expiresIn: '6h' }, 
     }),
-    UsersModule, // Jangan lupa mengimpor UsersModule di sini
+    UsersModule, 
     PrismaModule,
   ],
   providers: [AuthService, JwtStrategy],

@@ -98,14 +98,12 @@ export class SnapService {
       JSON.stringify(shippingAddress, null, 2),
     );
 
-    // Basic validation
     if (!userId && !guestId) {
       throw new BadRequestException(
         'User ID or Guest ID is required to create a transaction.',
       );
     }
 
-    // More detailed logging for input payload
     this.logger.debug('Incoming Payload:', JSON.stringify(payload, null, 2));
     this.logger.debug(
       'Incoming Shipping Address:',
@@ -116,7 +114,7 @@ export class SnapService {
       async (prisma) => {
         this.logger.log('📦 --- Inside Prisma Transaction --- 📦');
 
-        // 1. Fetch Cart Items using correct identifier
+          // 1. Fetch Cart Items using correct identifier
         const cartWhereClause = userId ? { userId } : { guestId };
         this.logger.log(
           `🛒 Fetching cart items with WHERE: ${JSON.stringify(cartWhereClause)}`,

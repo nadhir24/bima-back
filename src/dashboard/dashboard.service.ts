@@ -14,7 +14,6 @@ export class DashboardService {
         recentSalesData,
         recentOrdersData,
       ] = await Promise.all([
-        // 1. Total Sales (Status Settlement)
         this.prisma.payment.aggregate({
           _sum: {
             amount: true,
@@ -23,17 +22,14 @@ export class DashboardService {
             status: 'SETTLEMENT',
           },
         }),
-        // 2. Total Users
         this.prisma.user.count(),
-        // 3. Total Products (Enabled)
         this.prisma.catalog.count(),
-        // 4. Recent Sales (5 Terbaru, Status Settlement)
         this.prisma.invoice.findMany({
           where: {
-            status: 'SETTLEMENT'
+            status: 'SETTLEMENT',
           },
           orderBy: {
-            createdAt: 'desc'
+            createdAt: 'desc',
           },
           take: 5,
           select: {
@@ -42,70 +38,71 @@ export class DashboardService {
             createdAt: true,
             user: {
               select: {
-                fullName: true
-              }
-            }
-          }
+                fullName: true,
+              },
+            },
+          },
         }),
-        // 5. Recent Orders (Items from 5 most recent invoices)
         this.prisma.$transaction(async (tx) => {
           const invoiceItems = await tx.invoiceItem.findMany({
             orderBy: {
               invoice: {
-                createdAt: 'desc'
-              }
+                createdAt: 'desc',
+              },
             },
-            take: 5, // Limit to 5 most recent items
+            take: 5,
             include: {
               invoice: {
                 include: {
-                  user: true
-                }
-              }
-            }
+                  user: true,
+                },
+              },
+            },
           });
 
-          // Get size details for each invoice item
           const itemsWithSizes = await Promise.all(
             invoiceItems.map(async (item) => {
               let sizeInfo = null;
               if (item.sizeId) {
                 sizeInfo = await tx.size.findUnique({
                   where: { id: item.sizeId },
-                  select: { size: true }
+                  select: { size: true },
                 });
               }
               return {
                 ...item,
-                sizeInfo
+                sizeInfo,
               };
-            })
+            }),
           );
-          
+
           return itemsWithSizes;
         }),
       ]);
 
-      // Format hasil
       const totalSales = Number(totalSalesData._sum.amount) || 0;
 
-      const recentSales = recentSalesData ? recentSalesData.map(sale => ({
-        ...sale,
-        amount: Number(sale.amount) || 0,
-      })) : [];
+      const recentSales = recentSalesData
+        ? recentSalesData.map((sale) => ({
+            ...sale,
+            amount: Number(sale.amount) || 0,
+          }))
+        : [];
 
-      const recentOrders = recentOrdersData ? recentOrdersData.map(item => ({
-        id: item.id,
-        invoiceId: item.invoiceId,
-        invoiceStatus: item.invoice.status,
-        userName: item.invoice.user?.fullName || 'Anonymous User',
-        productName: item.name,
-        quantity: item.quantity,
-        price: Number(item.price) || 0,
-        date: item.invoice.createdAt,
-        sizeId: item.sizeId || 0,
-        sizeLabel: item.sizeInfo?.size || ''
-      })) : [];
+      const recentOrders = recentOrdersData
+        ? recentOrdersData.map((item) => ({
+            id: item.id,
+            invoiceId: item.invoiceId,
+            invoiceStatus: item.invoice.status,
+            userName: item.invoice.user?.fullName || 'Anonymous User',
+            productName: item.name,
+            quantity: item.quantity,
+            price: Number(item.price) || 0,
+            date: item.invoice.createdAt,
+            sizeId: item.sizeId || 0,
+            sizeLabel: item.sizeInfo?.size || '',
+          }))
+        : [];
 
       return {
         totalSales,
@@ -115,8 +112,9 @@ export class DashboardService {
         recentOrders,
       };
     } catch (error) {
-      console.error('Error fetching dashboard summary:', error);
-      throw new InternalServerErrorException('Could not fetch dashboard summary data.');
+      throw new InternalServerErrorException(
+        'Could not fetch dashboard summary data.',
+      );
     }
   }
-} 
+}

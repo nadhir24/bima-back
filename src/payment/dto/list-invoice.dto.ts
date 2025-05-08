@@ -7,7 +7,7 @@ export class ListInvoicesDto {
 
     @IsOptional()
     @IsString()
-    @IsEnum(['IDR', 'USD']) // Validasi enum currency, sesuaikan daftar mata uang yang didukung
+    @IsEnum(['IDR', 'USD']) 
     currency?: string;
 
     @IsOptional()
@@ -16,27 +16,26 @@ export class ListInvoicesDto {
 
     @IsOptional()
     @IsString()
-    payer_email?: string; // Tambahkan filter payer_email
+    payer_email?: string;
 
     @IsOptional()
     @IsString()
-    description?: string; // Tambahkan filter description
+    description?: string;
 
     @IsOptional()
     @IsString()
-    client_id?: string; // Tambahkan filter client_id
+    client_id?: string;
 
     @IsOptional()
     @IsString()
-    payment_method?: string; // Tambahkan payment_method sebagai query param
+    payment_method?: string;
 
     @IsOptional()
     @IsString()
-    created_gte?: string; // Tambahkan filter tanggal created (>=)
+    created_gte?: string;
 
     @IsOptional()
     @IsString()
-    created_lte?: string; // Tambahkan filter tanggal created (<=)
+    created_lte?: string;
 
-    // ... tambahkan query params lain sesuai kebutuhan API Xendit ...
 }

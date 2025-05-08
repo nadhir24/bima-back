@@ -2,7 +2,7 @@ import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
 
-import { JwtStrategy } from '../jwt.strategy'; // Import strategy JWT
+import { JwtStrategy } from '../jwt.strategy';
 import { AuthService } from './auth.service';
 import { AuthController } from './auth.controller';
 import { UsersModule } from 'src/users/users.module';
@@ -12,9 +12,9 @@ import { UsersModule } from 'src/users/users.module';
     PassportModule,
     JwtModule.register({
       secret: process.env.JWT_SECRET_KEY,
-      signOptions: { expiresIn: '6h' }, // Token expired dalam 6 jam
+      signOptions: { expiresIn: '6h' }, 
     }),
-    UsersModule, // Jangan lupa mengimpor UsersModule di sini
+    UsersModule, 
   ],
   providers: [AuthService, JwtStrategy],
   controllers: [AuthController],

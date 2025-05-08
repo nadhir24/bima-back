@@ -1,4 +1,11 @@
-import { Injectable, HttpException, HttpStatus, Logger, BadRequestException, UnauthorizedException } from '@nestjs/common';
+import {
+  Injectable,
+  HttpException,
+  HttpStatus,
+  Logger,
+  BadRequestException,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { PrismaService } from 'prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
@@ -16,7 +23,6 @@ export class AuthService {
   ) {}
 
   async login(loginDto: LoginDto) {
-    this.logger.log(`Login attempt for email: ${loginDto.email}`);
     try {
       const user = await this.prisma.user.findUnique({
         where: { email: loginDto.email },
@@ -24,14 +30,10 @@ export class AuthService {
       });
 
       if (!user) {
-        this.logger.warn(`User not found for email: ${loginDto.email}`);
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
 
       if (!user.userPassword) {
-        this.logger.error(
-          `User ${loginDto.email} does not have a password record.`,
-        );
         throw new HttpException('Invalid credentials', HttpStatus.UNAUTHORIZED);
       }
 
@@ -41,12 +43,10 @@ export class AuthService {
       );
 
       if (!isValid) {
-        this.logger.warn(`Invalid password for user: ${loginDto.email}`);
         throw new HttpException('Invalid password', HttpStatus.UNAUTHORIZED);
       }
 
       const roles = user.userRoles.map((userRole) => userRole.role.name);
-      this.logger.log(`User ${user.email} roles: ${roles.join(', ')}`);
 
       const payload = {
         id: user.id,
@@ -59,22 +59,15 @@ export class AuthService {
 
       const token = this.jwtService.sign(payload, {
         secret: this.configService.get<string>('JWT_SECRET_KEY'),
-        expiresIn: '6h', // Diubah ke 6 jam
+        expiresIn: '6h',
       });
 
-      this.logger.log(
-        `Login successful for user: ${user.email}, token generated.`,
-      );
       return {
         statusCode: HttpStatus.OK,
         token: token,
-        loginData: payload, // Mengembalikan payload yang sama dengan yang ada di token
+        loginData: payload,
       };
     } catch (e) {
-      this.logger.error(
-        `Login error for ${loginDto.email}: ${e.message}`,
-        e.stack,
-      );
       if (e instanceof HttpException) {
         throw e;
       }
@@ -83,14 +76,10 @@ export class AuthService {
   }
 
   async verifyTokenRole(userId: number, token: string) {
-    this.logger.log(`Verifying token role for user ID: ${userId}`);
     try {
       const decodedToken = this.jwtService.verify(token, {
         secret: this.configService.get<string>('JWT_SECRET_KEY'),
       });
-      this.logger.log(
-        `Token decoded for user ID ${userId}: ${JSON.stringify(decodedToken)}`,
-      );
 
       const currentUser = await this.prisma.user.findUnique({
         where: { id: userId },
@@ -98,9 +87,6 @@ export class AuthService {
       });
 
       if (!currentUser) {
-        this.logger.warn(
-          `User not found during token role verification: ${userId}`,
-        );
         throw new UnauthorizedException('User not found');
       }
 
@@ -112,21 +98,18 @@ export class AuthService {
         currentRoles.every((role) => tokenRoles.includes(role));
 
       if (!rolesMatch) {
-        this.logger.log(
-          `Role change detected for user ID ${userId}. Current: ${currentRoles.join(',')}, Token: ${tokenRoles.join(',')}. Generating new token.`,
-        );
         const newPayload = {
           id: currentUser.id,
           fullName: currentUser.fullName,
           email: currentUser.email,
           phoneNumber: currentUser.phoneNumber,
-          roles: currentRoles, // Gunakan roles terbaru dari database
+          roles: currentRoles,
           photoProfile: currentUser.photoProfile,
         };
 
         const newToken = this.jwtService.sign(newPayload, {
           secret: this.configService.get<string>('JWT_SECRET_KEY'),
-          expiresIn: '6h', // Diubah ke 6 jam
+          expiresIn: '6h',
         });
 
         return {
@@ -138,20 +121,13 @@ export class AuthService {
         };
       }
 
-      this.logger.log(
-        `Token role verified and matches current role for user ID ${userId}`,
-      );
       return {
         valid: true,
         roleChanged: false,
         message: 'Token role verified and matches current role',
-        userData: decodedToken, // Kembalikan decoded token jika role tidak berubah
+        userData: decodedToken,
       };
     } catch (error) {
-      this.logger.error(
-        `Error verifying token role for user ID ${userId}: ${error.message}`,
-        error.stack,
-      );
       if (
         error instanceof UnauthorizedException ||
         error instanceof HttpException
@@ -166,7 +142,6 @@ export class AuthService {
   }
 
   async extractAndVerifyToken(token: string) {
-    this.logger.log('Attempting to extract and verify token.');
     try {
       let decodedToken;
       try {
@@ -174,24 +149,15 @@ export class AuthService {
           secret: this.configService.get<string>('JWT_SECRET_KEY'),
         });
       } catch (e) {
-        this.logger.warn(
-          `Token verification failed (jwtService.verify): ${e.message}`,
-        );
         throw new UnauthorizedException('Invalid or expired token');
       }
 
       const userId = decodedToken.id;
       if (!userId) {
-        this.logger.warn('No user ID found in decoded token.');
         throw new BadRequestException('No user ID in token');
       }
-      this.logger.log(`User ID ${userId} extracted from token.`);
-      return this.verifyTokenRole(userId, token); // Panggil verifyTokenRole yang sudah ada
+      return this.verifyTokenRole(userId, token);
     } catch (error) {
-      this.logger.error(
-        `Error in extractAndVerifyToken: ${error.message}`,
-        error.stack,
-      );
       if (error instanceof HttpException) {
         throw error;
       }
@@ -208,7 +174,6 @@ export class AuthService {
         secret: this.configService.get<string>('JWT_SECRET_KEY'),
       });
     } catch (error) {
-      this.logger.error(`JWT verification failed: ${error.message}`);
       throw new HttpException(
         'Invalid or expired token',
         HttpStatus.UNAUTHORIZED,

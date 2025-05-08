@@ -39,25 +39,21 @@ export class CartService {
   ): Promise<CartWithRelations[]> {
     const where = params.where || {};
 
-    // Jika userId ada dan bertipe string, ubah ke number
     if (where.userId && typeof where.userId === 'string') {
       where.userId = parseInt(where.userId, 10);
 
-      // Validasi apakah parsing berhasil
       if (isNaN(where.userId)) {
         throw new Error('Invalid userId: not a number');
       }
     }
 
-    // Pastikan include size mengambil semua field termasuk qty
     const include = {
       catalog: true,
-      size: true, // Ini akan otomatis include semua field size termasuk qty
-      user: true, // Include user juga jika diperlukan
+      size: true,
+      user: true,
       ...(params.include || {}),
     };
 
-    // Hapus select jika ada, agar semua field size diambil oleh include: true
     if (
       include.size &&
       typeof include.size === 'object' &&
@@ -94,34 +90,28 @@ export class CartService {
     quantity: number,
   ): Promise<Cart> {
     try {
-      // Validasi input
       if (!catalogId || !sizeId || quantity <= 0) {
         throw new BadRequestException('Invalid input data');
       }
 
-      // Pastikan minimal userId atau guestId ada
       if (userId === null && !guestId) {
         throw new BadRequestException('Either userId or guestId is required');
       }
 
-      // Construct the where clause based on identifier
       let whereClause: Prisma.CartFindFirstArgs['where'];
       if (userId) {
         whereClause = { userId: userId, catalogId, sizeId };
       } else if (guestId) {
         whereClause = { guestId: guestId, catalogId, sizeId };
       } else {
-        // This case should ideally not be reached due to the check above
         throw new BadRequestException('Invalid identifier state');
       }
 
-      // Cek apakah item sudah ada di cart using the specific clause
       const existingCart = await this.prisma.cart.findFirst({
         where: whereClause,
       });
 
       if (existingCart) {
-        // Update quantity jika item sudah ada
         return this.prisma.cart.update({
           where: { id: existingCart.id },
           data: { quantity: existingCart.quantity + quantity },
@@ -132,7 +122,6 @@ export class CartService {
         });
       }
 
-      // Buat cart item baru
       return this.prisma.cart.create({
         data: {
           userId,
@@ -147,7 +136,6 @@ export class CartService {
         },
       });
     } catch (error) {
-      console.error('Error in addToCart service:', error);
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         throw new HttpException(
           `Database error: ${error.message}`,
@@ -178,7 +166,6 @@ export class CartService {
     if (quantity <= 0) return this.removeCartItem(userId, guestId, cartId);
 
     try {
-      // Ambil data cart dengan catalog dan size
       const cartItem = await prisma.cart.findUniqueOrThrow({
         where: { id: cartId },
         include: { size: true, catalog: true },
@@ -186,16 +173,13 @@ export class CartService {
 
       this.authorizeCartAccess(cartItem, userId, guestId);
 
-      // Validasi stok yang benar
       if (cartItem.size?.qty !== undefined && quantity > cartItem.size.qty) {
-        // Perbaikan: gunakan cartItem.catalog.name, bukan CatalogItem.name
         throw new HttpException(
           `Insufficient stock for ${cartItem.catalog?.name || 'item'} (${cartItem.size.size}). Available: ${cartItem.size.qty}`,
           HttpStatus.BAD_REQUEST,
         );
       }
 
-      // Update cart dan return data lengkap
       const updatedCart = await prisma.cart.update({
         where: { id: cartId },
         data: { quantity },
@@ -204,9 +188,6 @@ export class CartService {
 
       return updatedCart;
     } catch (error) {
-      console.error('Error in updateCartItem:', error);
-
-      // Perbaikan error handling
       if (error instanceof HttpException) {
         throw error;
       } else if (error instanceof Prisma.PrismaClientKnownRequestError) {
@@ -281,25 +262,17 @@ export class CartService {
     userId: number | null,
     guestId: string | null,
   ): void {
-    // Admin check - customize this based on your admin role implementation
-    // If your admins have specific IDs (like 1, 6, etc), you can add them here
-    const adminUserIds = [1, 6]; // Contoh: user id 1 dan 6 adalah admin
+    const adminUserIds = [1, 6];
     const isAdmin = userId !== null && adminUserIds.includes(userId);
 
-    // Skip further checks if the user is an admin
     if (isAdmin) {
-      console.log(`User ${userId} is an admin, allowing cart access`);
       return;
     }
 
-    // Regular authorization check
     if (
       (userId && cartItem.userId !== userId) ||
       (!userId && guestId && cartItem.guestId !== guestId)
     ) {
-      console.log(
-        `Access denied to cart ${cartItem.id}: cart belongs to userId=${cartItem.userId}, guestId=${cartItem.guestId} requested by userId=${userId}, guestId=${guestId}`,
-      );
       throw new ForbiddenException('Unauthorized access to cart item.');
     }
   }
@@ -317,11 +290,8 @@ export class CartService {
           OR: [{ userId: userId }, { guestId: guestId || undefined }],
         },
       });
-      // Jika _sum null (keranjang kosong), kembalikan 0
       return aggregateResult._sum.quantity ?? 0;
     } catch (error) {
-      console.error('Error calculating cart item count:', error);
-      // Kembalikan 0 jika ada error, atau throw exception sesuai kebutuhan
       return 0;
     }
   }
@@ -339,22 +309,19 @@ export class CartService {
       });
 
       if (!cartItems || cartItems.length === 0) {
-        return 0; // Return 0 if the cart is empty
+        return 0;
       }
 
       const total = cartItems.reduce((accumulator, item) => {
-        const priceString = item.size.price || '0'; // Default to '0' if price is missing
+        const priceString = item.size.price || '0';
 
-        // Remove Rp and replace dots with nothing to handle thousand separators
         const numericPrice = Number(priceString.replace(/Rp|\./g, ''));
 
-        // Multiply price by quantity and add to the accumulator
         return accumulator + numericPrice * item.quantity;
       }, 0);
 
-      return total; // Return the calculated total as a number
+      return total;
     } catch (error) {
-      console.error('Error calculating cart total:', error);
       throw new HttpException(
         'Failed to calculate cart total',
         HttpStatus.INTERNAL_SERVER_ERROR,
@@ -362,62 +329,36 @@ export class CartService {
     }
   }
 
-  /**
-   * Remove all cart items that contain a specific catalog (product)
-   * This is useful for admins who need to delete a product
-   */
-  async removeAllCartItemsByCatalogId(
-    catalogId: number,
-  ): Promise<{ message: string; count: number }> {
+  async removeAllCartItemsByCatalogId(catalogId: number) {
     try {
-      console.log(
-        `Attempting to remove all cart items for catalog ID: ${catalogId}`,
-      );
-
-      // First, find all cart items with this catalog ID
       const cartItems = await this.prisma.cart.findMany({
         where: { catalogId },
-        include: { catalog: true, size: true },
+        include: {
+          catalog: {
+            select: { name: true },
+          },
+        },
       });
 
       if (cartItems.length === 0) {
-        console.log(`No cart items found for catalog ID: ${catalogId}`);
-        return { message: 'No cart items found with this product', count: 0 };
+        return {
+          message: 'No cart items found for this catalog',
+          count: 0,
+        };
       }
 
-      console.log(
-        `Found ${cartItems.length} cart items for catalog ID: ${catalogId}`,
-      );
-
-      // Delete all cart items with this catalog ID
-      const result = await this.prisma.cart.deleteMany({
+      const deleteResult = await this.prisma.cart.deleteMany({
         where: { catalogId },
       });
 
-      console.log(
-        `Successfully removed ${result.count} cart items for catalog ID: ${catalogId}`,
-      );
-
       return {
-        message: `Successfully removed ${result.count} cart items containing this product`,
-        count: result.count,
+        message: `Successfully removed ${deleteResult.count} cart items for product: ${cartItems[0]?.catalog?.name || catalogId}`,
+        count: deleteResult.count,
       };
     } catch (error) {
-      console.error(
-        `Error removing cart items for catalog ID ${catalogId}:`,
-        error,
-      );
-
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        throw new HttpException(
-          `Database error: ${error.message}`,
-          HttpStatus.INTERNAL_SERVER_ERROR,
-        );
-      }
-
       throw new HttpException(
-        'Failed to remove cart items',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        error.message || 'Failed to remove cart items for this catalog',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }

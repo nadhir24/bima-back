@@ -11,7 +11,6 @@ import {
 import { Type } from 'class-transformer';
 import { CreateShippingAddressDto } from './create-shipping-address.dto';
 
-// 1. CreateInvoiceCustomerAddressDto (DEKLARASIKAN PALING ATAS)
 export class CreateInvoiceCustomerAddressDto {
   @IsOptional()
   @IsString()
@@ -38,7 +37,6 @@ export class CreateInvoiceCustomerAddressDto {
   country_code?: string;
 }
 
-// 2. CreateInvoiceCustomerDto (DEKLARASIKAN SETELAH CreateInvoiceCustomerAddressDto)
 export class CreateInvoiceCustomerDto {
   @IsOptional()
   @IsString()
@@ -58,11 +56,10 @@ export class CreateInvoiceCustomerDto {
 
   @IsOptional()
   @ValidateNested()
-  @Type(() => CreateInvoiceCustomerAddressDto) // <--- Sekarang CreateInvoiceCustomerAddressDto SUDAH DIDEKLARASIKAN
+  @Type(() => CreateInvoiceCustomerAddressDto) 
   address?: CreateInvoiceCustomerAddressDto;
 }
 
-// 3. CreateInvoiceItemDto (URUTAN TIDAK MASALAH)
 export class CreateInvoiceItemDto {
   @IsNotEmpty()
   @IsString()
@@ -93,7 +90,6 @@ export class CreateInvoiceItemDto {
   sizeId?: number;
 }
 
-// 4. CreateInvoiceDto (DEKLARASIKAN PALING BAWAH, SETELAH SEMUA DTO LAIN YANG DIPAKAI)
 export class CreateInvoiceDto {
   @IsOptional()
   @IsNumber()

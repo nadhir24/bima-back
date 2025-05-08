@@ -7,7 +7,7 @@ export class ListTransactionsDto {
 
     @IsOptional()
     @IsString()
-    @IsEnum(['IDR', 'USD']) // Validasi enum currency, sesuaikan daftar mata uang yang didukung
+    @IsEnum(['IDR', 'USD'])
     currency?: string;
 
     @IsOptional()
@@ -16,15 +16,13 @@ export class ListTransactionsDto {
 
     @IsOptional()
     @IsString()
-    reference_id?: string; // Tambahkan filter reference_id (external_id atau invoice_id dll)
-
+    reference_id?: string;
     @IsOptional()
     @IsString()
-    created_gte?: string; // Tambahkan filter tanggal created (>=)
-
+    created_gte?: string;
     @IsOptional()
     @IsString()
-    created_lte?: string; // Tambahkan filter tanggal created (<=)
+    created_lte?: string; 
 
 
 }

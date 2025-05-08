@@ -33,25 +33,21 @@ export class UsersController {
   async getAllUsers(
     @Query('page') page?: string,
     @Query('limit') limit?: string,
-    @Query('search') search?: string
+    @Query('search') search?: string,
   ) {
     try {
       const pageNum = page ? parseInt(page, 10) : 1;
       const limitNum = limit ? parseInt(limit, 10) : 10;
-      
-      // Log request parameters
-      console.log('Fetching users with parameters:', {
-        page: pageNum,
-        limit: limitNum,
-        search: search || 'none'
-      });
-      
-      return await this.usersService.getUsersWithRoles(pageNum, limitNum, search);
+
+      return await this.usersService.getUsersWithRoles(
+        pageNum,
+        limitNum,
+        search,
+      );
     } catch (error) {
-      console.error('Error in getAllUsers:', error);
       throw new HttpException(
         error.message || 'Failed to fetch users',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
@@ -74,14 +70,16 @@ export class UsersController {
   async getUserAddresses(@Param('id', ParseIntPipe) id: number) {
     try {
       const addresses = await this.usersService.getUserAddresses(id);
-      if (!addresses) { // addresses could be null or empty array
-        return []; // Return empty array if no addresses found or user doesn't exist
+      if (!addresses) {
+        return []; 
       }
       return addresses;
     } catch (error) {
-      console.error(`Error fetching addresses for user ${id}:`, error);
       if (error instanceof HttpException) throw error;
-      throw new HttpException('Failed to fetch user addresses', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException(
+        'Failed to fetch user addresses',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 
@@ -124,16 +122,14 @@ export class UsersController {
       finalImageUrl = oldImage;
     }
 
-    // Capture the response from the service
     const serviceResponse = await this.usersService.updateUser(+id, {
       ...updateUserDto,
       photoProfile: finalImageUrl,
     });
 
-    // Return the full service response
     return serviceResponse;
   }
-  
+
   @Delete('delete/:id')
   async deleteUser(@Param('id') id: string) {
     try {
@@ -147,7 +143,8 @@ export class UsersController {
   @Post(':id/addresses')
   async addUserAddress(
     @Param('id', ParseIntPipe) id: number,
-    @Body() addressDto: {
+    @Body()
+    addressDto: {
       label?: string;
       street: string;
       city: string;
@@ -155,14 +152,14 @@ export class UsersController {
       postalCode: string;
       country?: string;
       isDefault?: boolean;
-    }
+    },
   ) {
     try {
       return await this.usersService.addOrUpdateUserAddress(id, addressDto);
     } catch (error) {
       throw new HttpException(
         error.message || 'Failed to add/update address',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
