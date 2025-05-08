@@ -9,10 +9,15 @@ import {
   Query,
   Res,
   UseGuards,
+  NotFoundException,
+  InternalServerErrorException,
+  Param,
+  Req,
+  HttpException,
 } from '@nestjs/common';
 import { SnapService } from './snap.service';
 import { PrismaService } from 'prisma/prisma.service';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 //di appmodule
 @Controller('payment/snap')
 export class SnapController {
@@ -26,21 +31,52 @@ export class SnapController {
    */
   @Post('create-transaction')
   @HttpCode(HttpStatus.OK)
-  async createTransaction(@Body() payload: any): Promise<any> {
+  async createTransaction(
+    @Body() payload: any, // Payload now contains userId OR guestId
+    @Req() req: Request, 
+  ): Promise<any> {
     try {
-      const userId = payload.userId || null; // Ambil userId jika ada
+      console.log('🔍 Request payload:', payload);
+      // console.log('👤 Request user:', req.user); // req.user might be null for guests
+
+      // Extract userId and guestId from the payload sent by frontend
+      const userId = payload.userId || null; 
+      const guestId = payload.guestId || null;
+      
+      console.log(`👤 Processing transaction for - UserID: ${userId}, GuestID: ${guestId}`);
+
+      // Pass both userId and guestId to the service
       const transaction = await this.snapService.createTransaction(
         userId,
-        payload,
+        guestId, // Pass guestId
+        payload, // Pass the rest of the payload for details like items, total etc.
+        payload.shippingAddress
       );
+
+      console.log('✅ Transaction created:', {
+        identifier: userId ? `User ${userId}` : `Guest ${guestId}`,
+        orderId: transaction.invoice?.midtransOrderId,
+        amount: transaction.invoice?.amount
+      });
+
       return {
         success: true,
         data: transaction,
       };
     } catch (error) {
-      return {
+      console.error('❌ Error creating transaction in controller:', {
+        error: error.message,
+        stack: error.stack,
+        userId: payload.userId,
+        guestId: payload.guestId
+      });
+
+      // Re-throw the error or return a more specific error response
+      // throw new InternalServerErrorException(error.message || 'Failed to create transaction');
+       return {
         success: false,
-        message: error.message,
+        message: error.message || 'Failed to create transaction',
+        statusCode: error.status || 500
       };
     }
   }
@@ -94,10 +130,7 @@ export class SnapController {
       });
 
       if (!invoice) {
-        return {
-          success: false,
-          message: 'Invoice tidak ditemukan',
-        };
+        throw new NotFoundException('Invoice tidak ditemukan');
       }
 
       return {
@@ -105,10 +138,10 @@ export class SnapController {
         data: invoice,
       };
     } catch (error) {
-      return {
-        success: false,
-        message: error.message,
-      };
+      if (error instanceof NotFoundException) {
+        throw error;
+      }
+      throw new InternalServerErrorException('Gagal mengambil detail order');
     }
   }
 
@@ -125,17 +158,18 @@ export class SnapController {
             select: {
               fullName: true,
               email: true,
+              phoneNumber: true,
             },
           },
         },
       });
 
-      return orders;
-    } catch (error) {
       return {
-        success: false,
-        message: error.message,
+        success: true,
+        data: orders,
       };
+    } catch (error) {
+      throw new InternalServerErrorException('Gagal mengambil daftar order');
     }
   }
 
@@ -150,13 +184,6 @@ export class SnapController {
         where: {
           midtransOrderId: orderId,
           user: null, // Pastikan ini adalah order guest
-          items: {
-            some: {
-              name: {
-                not: 'Biaya Pengiriman'
-              }
-            }
-          }
         },
         include: {
           items: true,
@@ -189,5 +216,10 @@ export class SnapController {
         message: error.message,
       };
     }
+  }
+
+  @Post('invoice/generate/:orderId')
+  async generateInvoice(@Param('orderId') orderId: string) {
+    return this.snapService.generateInvoiceManually(orderId);
   }
 }

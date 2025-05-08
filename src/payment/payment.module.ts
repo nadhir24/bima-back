@@ -1,20 +1,14 @@
-import { forwardRef, Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { CartModule } from '../cart/cart.module';
+import { Module, forwardRef } from '@nestjs/common';
+import { PaymentController } from './payment.controller';
+import { PaymentService } from './payment.service';
 import { PrismaModule } from 'prisma/prisma.module';
 import { SnapModule } from './snap/snap.module';
 import { RefundModule } from './refund/refund.module';
-import { CatalogModule } from '../catalog/catalog.module';
 
 @Module({
-  imports: [
-    ConfigModule.forRoot({ isGlobal: true }),
-    forwardRef(() => CartModule),
-    PrismaModule,
-    forwardRef(() => SnapModule),
-    forwardRef(() => RefundModule),
-    forwardRef(() => CatalogModule),
-  ],
-  // Removed exports of SnapService because it is not a provider in PaymentModule.
+  imports: [PrismaModule, forwardRef(() => SnapModule), RefundModule],
+  controllers: [PaymentController],
+  providers: [PaymentService],
+  exports: [PaymentService],
 })
 export class PaymentModule {}

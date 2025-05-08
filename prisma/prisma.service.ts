@@ -20,9 +20,10 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
         data: [
           { name: 'admin' }, // Role admin
           { name: 'guest' },  // Role guest
+          { name: 'user' },  // Role user
         ],
       });
-      console.log('Roles seeded: admin, guest');
+      console.log('Roles seeded: admin, guest, user');
     } else {
       console.log('Roles already exist');
     }

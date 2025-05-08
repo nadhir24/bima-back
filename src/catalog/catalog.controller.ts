@@ -1,341 +1,318 @@
-import {
-  Controller,
-  Post,
-  Body,
-  UploadedFile,
-  HttpException,
+import { 
+  Controller, 
+  Get, 
+  Post, 
+  Body, 
+  Patch, 
+  Param, 
+  Delete, 
+  Query, 
+  HttpException, 
   HttpStatus,
   UseInterceptors,
-  Get,
-  Param,
-  Res,
-  Delete,
-  Patch,
-  ParseIntPipe,
-  Put,
-  Query,
-  DefaultValuePipe,
+  UploadedFile,
+  ParseFilePipe,
+  FileTypeValidator,
+  MaxFileSizeValidator,
+  Inject,
+  forwardRef,
+  Res
 } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { join, extname } from 'path';
-import * as sharp from 'sharp';
-import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { CatalogService } from './catalog.service';
-import { Catalog } from '@prisma/client';
+import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { UpdateCatalogDto } from './dto/update-catalog.dto';
-import { Response } from 'express';
+import { ValidationPipe } from '@nestjs/common';
+import { CartService } from '../cart/cart.service'; 
+import { PrismaService } from 'prisma/prisma.service';
+
+// Transform form data to proper DTO format
+function transformFormDataToDTO(formData: any): any {
+  const transformedData = { ...formData };
+
+  // Convert sizes from string to array if needed
+  if (typeof transformedData.sizes === 'string') {
+    try {
+      transformedData.sizes = JSON.parse(transformedData.sizes);
+    } catch (error) {
+      throw new HttpException(
+        'Invalid sizes format. Expected a valid JSON array.',
+        HttpStatus.BAD_REQUEST
+      );
+    }
+  }
+  
+  // Convert isEnabled from string to boolean
+  if (typeof transformedData.isEnabled === 'string') {
+    transformedData.isEnabled = transformedData.isEnabled === 'true';
+  }
+  
+  // Set default blurDataURL if not present
+  if (!transformedData.blurDataURL) {
+    transformedData.blurDataURL = '';
+  }
+  
+  return transformedData;
+}
 
 @Controller('catalog')
 export class CatalogController {
-  constructor(private readonly catalogService: CatalogService) {}
+  constructor(
+    private readonly catalogService: CatalogService,
+    @Inject(forwardRef(() => CartService))
+    private readonly cartService: CartService,
+    private readonly prisma: PrismaService,
+  ) {}
 
-  // Helper function to generate blurDataURL
-  private async generateBlurDataURL(imagePath: string): Promise<string> {
+  @Post()
+  @UseInterceptors(FileInterceptor('image'))
+  async create(
+    @Body() formData: any,
+    @UploadedFile(
+      /* // Temporarily comment out the pipe
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
+        ],
+        fileIsRequired: false,
+      }),
+      */
+    )
+    file?: Express.Multer.File
+  ) {
+    // console.log('Uploaded File Raw:', file); // Add this maybe?
+    console.log('=== CatalogController.create ===');
+    console.log('Raw Request Body:', JSON.stringify(formData, null, 2));
+    
     try {
-      console.log(`Generating blurDataURL for: ${imagePath}`); // Log the path being used
-      const imageBuffer = await sharp(imagePath)
-        .resize(20) // Small size for blur placeholder
-        .toBuffer();
-
-      // Convert to base64 for data URL
-      return `data:image/png;base64,${imageBuffer.toString('base64')}`;
+      // Transform form data before validation
+      const transformedData = transformFormDataToDTO(formData);
+      console.log('Transformed Data:', JSON.stringify(transformedData, null, 2));
+      
+      // Use a validation pipe manually
+      const validationPipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: false, // Change to false to see all fields
+        skipMissingProperties: true, // Skip validation for missing properties
+        forbidUnknownValues: false, // Don't reject unknown values
+      });
+      
+      // Validate and transform into DTO
+      const createCatalogDto = await validationPipe.transform(
+        transformedData, 
+        { metatype: CreateCatalogDto, type: 'body' }
+      ) as CreateCatalogDto;
+      
+      console.log('Validated DTO:', JSON.stringify(createCatalogDto, null, 2));
+      console.log('Uploaded File:', file ? file.filename : 'No file uploaded');
+      
+      // Add file path to DTO if file exists
+      if (file) {
+        createCatalogDto.image = `/uploads/catalog_images/${file.filename}`;
+        console.log('Added image path to DTO:', createCatalogDto.image);
+      }
+      
+      const result = await this.catalogService.createCatalog(createCatalogDto);
+      console.log('Create catalog success');
+      return result;
     } catch (error) {
-      console.error('Error generating blur data URL:', error);
-      return null;
+      console.error('Create catalog validation error:', error);
+      
+      // Enhanced error logging
+      if (error.response && error.response.message) {
+        console.error('Validation errors:', JSON.stringify(error.response.message, null, 2));
+        
+        // Log more details about the sizes array if it's causing issues
+        if (formData.sizes) {
+          console.error('Sizes array details:');
+          console.error('- Original:', formData.sizes);
+          console.error('- Type:', typeof formData.sizes);
+        }
+      }
+      
+      throw error;
     }
   }
 
-  @Get()
-  async findAll(): Promise<Catalog[]> {
-    return this.catalogService.findAll();
-  }
-
-  @Get(':id')
-  async findOne(@Param('id', ParseIntPipe) id: number): Promise<Catalog> {
-    console.log('Received GET request for product ID:', id);
-    console.log('Param type:', typeof id);
+  @Get('date-range')
+  findByDateRange(@Query('startDate') startDate: string, @Query('endDate') endDate: string) {
+    console.log('=== CatalogController.findByDateRange ===');
+    console.log('Query params:', { startDate, endDate });
     try {
-      const catalogItem = await this.catalogService.findOne(id);
-      console.log('Found product:', catalogItem);
-
-      if (!catalogItem) {
-        throw new HttpException('Catalog item not found', HttpStatus.NOT_FOUND);
-      }
-      return catalogItem;
+      return this.catalogService.findByDateRange(new Date(startDate), new Date(endDate));
     } catch (error) {
-      console.error('Error finding product:', {
-        error: error.message,
-        stack: error.stack
-      });
-      // Handle potential Prisma errors or other issues
-      if (error instanceof HttpException) {
-        throw error; // Re-throw known HTTP exceptions
-      }
-      console.error(`Error fetching catalog with ID ${id}:`, error);
+      console.error('Find by date range error:', error);
       throw new HttpException(
-        'Internal server error',
-        HttpStatus.INTERNAL_SERVER_ERROR,
+        'Failed to search products by date range',
+        HttpStatus.INTERNAL_SERVER_ERROR
       );
     }
   }
 
-  @Get('images/:imgpath')
-  seeUploadedFile(@Param('imgpath') image: string, @Res() res: Response) {
-    const filePath = join(process.cwd(), 'uploads', 'catalog_images', image);
-    res.sendFile(filePath, (err) => {
-      if (err) {
-        res.status(404).send('File not found.');
-      }
-    });
+  @Get('category/:categorySlug')
+  findByCategory(@Param('categorySlug') categorySlug: string) {
+    console.log('=== CatalogController.findByCategory ===');
+    console.log('Category slug:', categorySlug);
+    return this.catalogService.findByCategory(categorySlug);
   }
 
   @Get(':categorySlug/:productSlug')
-  async getCatalogItem(
+  async findBySlug(
     @Param('categorySlug') categorySlug: string,
     @Param('productSlug') productSlug: string,
+    @Res() res: any
   ) {
-    console.log(
-      `Fetching item for categorySlug: ${categorySlug}, productSlug: ${productSlug}`,
-    );
-
-    const catalogItem = await this.catalogService.findBySlug(
-      categorySlug,
-      productSlug,
-    );
-
-    if (!catalogItem) {
-      throw new HttpException('Catalog item not found', HttpStatus.NOT_FOUND);
+    console.log('=== CatalogController.findBySlug ===');
+    console.log('Params:', { categorySlug, productSlug });
+    
+    // Khusus untuk permintaan gambar yang salah rute
+    if (categorySlug === 'images') {
+      console.log('Detected image request, redirecting to proper image path');
+      
+      // Redirect ke URL yang benar untuk gambar
+      return res.redirect(`/uploads/catalog_images/${productSlug}`);
     }
 
-    return catalogItem;
+    // Untuk permintaan katalog normal
+    const catalog = await this.catalogService.findBySlug(categorySlug, productSlug);
+    return res.json(catalog);
   }
 
-  @Post('create')
-  @UseInterceptors(
-    FileInterceptor('image', {
-      storage: diskStorage({
-        destination: join(
-          __dirname,
-          '..',
-          '..',
-          '..',
-          'uploads',
-          'catalog_images',
-        ),
-        filename: (req, file, cb) => {
-          const filename = file.originalname.split('.')[0];
-          const extension = extname(file.originalname);
-          cb(null, `${filename}-${Date.now()}${extension}`);
-        },
-      }),
-    }),
-  )
-  async createCatalog(
-    @Body() formData: any,
-    @UploadedFile() image: Express.Multer.File,
-  ) {
-    try {
-      const finalImageUrl = image ? `/catalog/images/${image.filename}` : null;
-      let blurDataURL = null;
-
-      // Generate blur data URL using plaiceholder
-      if (image) {
-        try {
-          const imagePath = join(
-            process.cwd(),
-            'uploads',
-            'catalog_images',
-            image.filename,
-          );
-          blurDataURL = await this.generateBlurDataURL(imagePath);
-        } catch (error) {
-          console.error('Error generating blur data URL:', error);
-        }
-      }
-
-      // Parse sizes from formData string
-      let parsedSizes: any[];
-      try {
-        if (typeof formData.sizes !== 'string') {
-          // This case might happen if not using multipart/form-data, but good to check
-           throw new Error('Expected sizes data to be a JSON string.');
-        }
-        parsedSizes = JSON.parse(formData.sizes);
-        if (!Array.isArray(parsedSizes)) {
-          throw new Error('Parsed sizes data is not an array.');
-        }
-      } catch (parseError) {
-        console.error('Error parsing sizes from formData:', parseError);
-        console.error('Received formData.sizes:', formData.sizes);
-        throw new HttpException(
-          `Invalid format for sizes data: ${parseError.message}`,
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const isEnabled = formData.isEnabled === 'true';
-      const productSlug = formData.name.toLowerCase().replace(/\s+/g, '-');
-      const categorySlug = formData.category.toLowerCase().replace(/\s+/g, '-');
-
-      const createCatalogDto: CreateCatalogDto = {
-        name: formData.name,
-        category: formData.category,
-        categorySlug,
-        productSlug,
-        sizes: parsedSizes.map((sizeData) => ({
-          size: sizeData.size,
-          price: String(parseFloat(String(sizeData.price).replace(/[^\d.-]/g, ''))),
-          qty: parseInt(sizeData.qty, 10) || 0,
-        })),
-        isEnabled,
-        image: finalImageUrl,
-        blurDataURL,
-        description: formData.description,
-      };
-
-      return await this.catalogService.createCatalog(createCatalogDto);
-    } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to create catalog entry',
-        HttpStatus.BAD_REQUEST,
-      );
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    console.log('=== CatalogController.findOne ===');
+    console.log('ID:', id);
+    const parsedId = parseInt(id, 10);
+    if (isNaN(parsedId)) {
+      console.error('Invalid ID format:', id);
+      throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
     }
+    return this.catalogService.findOne(parsedId);
   }
 
-  @Put(':id')
-  @UseInterceptors(
-    FileInterceptor('image', {
-      storage: diskStorage({
-        destination: join(
-          __dirname,
-          '..',
-          '..',
-          '..',
-          'uploads',
-          'catalog_images',
-        ),
-        filename: (req, file, cb) => {
-          const filename = file.originalname.split('.')[0];
-          const extension = extname(file.originalname);
-          cb(null, `${filename}-${Date.now()}${extension}`);
-        },
-      }),
-    }),
-  )
-  async updateCatalog(
+  @Get()
+  findAll(@Query() query) {
+    console.log('=== CatalogController.findAll ===');
+    console.log('Query:', query);
+    // If search query parameter exists, use it to search products
+    if (query.search) {
+      console.log('Searching catalogs with query:', query.search);
+      return this.catalogService.searchCatalogs(query.search);
+    }
+    console.log('Getting all catalogs');
+    return this.catalogService.findAll();
+  }
+
+  @Patch(':id')
+  @UseInterceptors(FileInterceptor('image'))
+  async update(
     @Param('id') id: string,
     @Body() formData: any,
-    @UploadedFile() image: Express.Multer.File,
-  ): Promise<Catalog> {
+    @UploadedFile(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }), // 10MB
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    file?: Express.Multer.File
+  ) {
+    console.log('=== CatalogController.update ===');
+    console.log('ID:', id);
+    console.log('Raw Request Body:', JSON.stringify(formData, null, 2));
+    
     try {
-      const finalImageUrl = image
-        ? `/catalog/images/${image.filename}`
-        : formData.existingImage;
-
-      let blurDataURL = null;
-
-      if (image) {
-        try {
-          const imagePath = join(
-            process.cwd(),
-            'uploads',
-            'catalog_images',
-            image.filename,
-          );
-          blurDataURL = await this.generateBlurDataURL(imagePath);
-        } catch (error) {
-          console.error('Error generating blur data URL:', error);
-        }
+      // Transform form data before validation
+      const transformedData = transformFormDataToDTO(formData);
+      console.log('Transformed Data:', JSON.stringify(transformedData, null, 2));
+      
+      // Use a validation pipe manually
+      const validationPipe = new ValidationPipe({
+        transform: true,
+        whitelist: true,
+        forbidNonWhitelisted: false,
+        skipMissingProperties: true
+      });
+      
+      // Validate and transform into DTO
+      const updateCatalogDto = await validationPipe.transform(
+        transformedData, 
+        { metatype: UpdateCatalogDto, type: 'body' }
+      ) as UpdateCatalogDto;
+      
+      console.log('Validated DTO:', JSON.stringify(updateCatalogDto, null, 2));
+      console.log('Uploaded File:', file ? file.filename : 'No file uploaded');
+      
+      // Add file path to DTO if file exists
+      if (file) {
+        updateCatalogDto.image = `/uploads/catalog_images/${file.filename}`;
+        console.log('Added image path to DTO:', updateCatalogDto.image);
       }
-
-      const isEnabled = formData.isEnabled === 'true';
-
-      let sizes;
-      let processedSizes;
-      try {
-        sizes =
-          typeof formData.sizes === 'string'
-            ? JSON.parse(formData.sizes)
-            : formData.sizes;
-
-        if (!Array.isArray(sizes)) {
-          throw new Error('Sizes must be an array');
-        }
-
-        processedSizes = sizes.map((sizeData: any) => {
-          if (!sizeData || typeof sizeData !== 'object') {
-            throw new Error('Invalid size data format');
-          }
-
-          const id = sizeData.id;
-          if (!id) {
-            throw new Error('Size ID is required');
-          }
-
-          return {
-            id: parseInt(id, 10),
-            size: sizeData.size,
-            qty: parseInt(sizeData.qty, 10) || 0,
-            price: sizeData.price, // Perubahan di sini: jangan hapus karakter non-angka
-          };
-        });
-
-        sizes = processedSizes;
-      } catch (error) {
-        console.error('Error processing sizes:', error);
-        throw new HttpException(
-          `Failed to process size data: ${error.message}`,
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-  
-
-      if (processedSizes.length === 0) {
-        console.error('Update catalog failed: No sizes provided in request');
-        console.error('Received formData:', formData);
-        console.error('Processed sizes:', sizes);
-        throw new HttpException(
-          'At least one size is required',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-
-      const updateCatalogDto: UpdateCatalogDto = {
-        name: formData.name,
-        category: formData.category,
-        description: formData.description,
-        sizes,
-        isEnabled,
-        image: finalImageUrl,
-        blurDataURL,
-      };
-
-      const numericId = parseInt(id, 10);
-      return await this.catalogService.updateCatalog(
-        numericId,
-        updateCatalogDto,
-      );
+      
+      return this.catalogService.updateCatalog(+id, updateCatalogDto);
     } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to update catalog entry',
-        HttpStatus.BAD_REQUEST,
-      );
+      console.error('Update catalog error:', error);
+      // Log validation details if available
+      if (error instanceof HttpException && error.getStatus() === HttpStatus.BAD_REQUEST) {
+          const response = error.getResponse();
+          if (typeof response === 'object' && response !== null && 'message' in response) {
+              console.error('Validation errors:', JSON.stringify(response['message'], null, 2));
+          } else {
+              console.error('Validation error details:', response);
+          }
+      }
+      throw error;
     }
   }
 
   @Delete(':id')
-  async remove(@Param('id') id: string): Promise<Catalog> {
+  remove(@Param('id') id: string) {
+    console.log('=== CatalogController.remove ===');
+    console.log('ID:', id);
     return this.catalogService.remove(+id);
   }
 
-  @Get('products')
-  async getProducts(
-    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
-    @Query('limit', new DefaultValuePipe(10), ParseIntPipe) limit: number,
-  ) {
-    console.log(`Backend Received - Page: ${page} (Type: ${typeof page}), Limit: ${limit} (Type: ${typeof limit})`); // <-- Add this log
-    return this.catalogService.findAllWithPagination({ page, limit });
+  /**
+   * Forcefully delete a catalog item by first clearing all cart items that reference it.
+   * This is an admin-only operation that should be used with caution.
+   */
+  @Delete(':id/force')
+  async forceRemove(@Param('id') id: string) {
+    const parsedId = parseInt(id, 10);
+    
+    if (isNaN(parsedId)) {
+      console.error('Invalid ID format for force delete:', id);
+      throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
+    }
+    
+    console.log('=== CatalogController.forceRemove ===');
+    console.log('ID:', parsedId);
+    
+    try {
+      // First, remove all cart items for this catalog
+      const cartResult = await this.cartService.removeAllCartItemsByCatalogId(parsedId);
+      console.log(`Removed ${cartResult.count} cart items`);
+      
+      // Then, delete the catalog
+      const deletedCatalog = await this.catalogService.remove(parsedId);
+      
+      return {
+        success: true,
+        message: `Product deleted successfully. ${cartResult.count} cart items were removed.`,
+        deletedCatalog
+      };
+    } catch (error) {
+      console.error('Force removal error:', error);
+      
+      throw new HttpException(
+        error.message || 'Failed to delete product',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      );
+    }
   }
 }
+     

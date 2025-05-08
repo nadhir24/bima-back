@@ -13,12 +13,6 @@ export class CreateUserDto {
   @Length(8, 100, { message: 'Password harus memiliki panjang minimal 8 karakter' })
   password: string;
 
-  @IsNotEmpty({ message: 'Konfirmasi password tidak boleh kosong' })
-  @ValidateIf(o => o.password === o.confirm_password, {
-    message: 'Konfirmasi password harus sama dengan password',
-  })
-  confirm_password: string;
-
   @IsNotEmpty({ message: 'Nomor telepon tidak boleh kosong' })
   @Matches(/^\+62\d{9,14}$/, {
     message: 'Nomor telepon harus valid dan sesuai format Indonesia',

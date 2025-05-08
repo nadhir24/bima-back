@@ -1,19 +1,30 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
-import { JwtPayload } from './jwt-payload.interface';  // Mengimpor interface JwtPayload
+import { UsersService } from 'src/users/users.service';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
-  constructor() {
+  constructor(private readonly usersService: UsersService) {
     super({
       jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ignoreExpiration: false,
       secretOrKey: process.env.JWT_SECRET_KEY,
     });
   }
 
-  async validate(payload: JwtPayload) {
-    // Menggunakan payload yang sudah sesuai dengan tipe JwtPayload
-    return { userId: payload.id, email: payload.email };
+  async validate(payload: any) {
+    // Use id from payload, fallback to sub if id is missing
+    const userId = payload.id || payload.sub;
+    
+    if (!userId) {
+      throw new UnauthorizedException('Invalid token payload: missing user ID');
+    }
+    
+    const user = await this.usersService.getUserById(userId);
+    if (!user) {
+      throw new UnauthorizedException('User not found');
+    }
+    return user;
   }
 }

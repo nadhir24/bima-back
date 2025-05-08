@@ -1,14 +1,12 @@
-// Datasource and Generator
+generator client {
+  provider = "prisma-client-js"
+}
+
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
 }
 
-generator client {
-  provider = "prisma-client-js"
-}
-
-// User Model
 model User {
   id           Int           @id @default(autoincrement())
   fullName     String
@@ -16,19 +14,18 @@ model User {
   email        String        @unique
   password     String
   createdAt    DateTime      @default(now())
-  carts        Cart[]
-  payments     Payment[]
-  userProfile  UserProfile?
-  userPassword UserPassword?
-  userRoles    UserRole[]
   photoProfile String?
+  carts        Cart[]
   customers    Customer[]
   invoices     Invoice[]     @relation("UserInvoices")
+  payments     Payment[]
+  userPassword UserPassword?
+  userProfile  UserProfile?
+  userRoles    UserRole[]
 
   @@map("users")
 }
 
-// Catalog Model
 model Catalog {
   id           Int     @id @default(autoincrement())
   name         String
@@ -38,115 +35,113 @@ model Catalog {
   description  String
   isEnabled    Boolean
   image        String?
-  sizes        Size[]  @relation("CatalogSizes")
-  carts        Cart[]  @relation("CatalogCarts")
   productSlug  String
+  carts        Cart[]  @relation("CatalogCarts")
+  sizes        Size[]  @relation("CatalogSizes")
 
   @@map("catalogs")
 }
 
-// Size Model - Updated with qty field
 model Size {
-  id        Int     @id @default(autoincrement())
-  size      String
-  price     String
-  qty       Int     @default(0)  // Added qty field for size-specific inventory
-  catalog   Catalog @relation("CatalogSizes", fields: [catalogId], references: [id])
-  catalogId Int
-  carts     Cart[]  @relation("SizeCarts")
-  invoiceItems InvoiceItem[] // Item invoice yang menggunakan ukuran ini
+  id           Int           @id @default(autoincrement())
+  size         String
+  price        String
+  qty          Int           @default(0)
+  catalogId    Int
+  carts        Cart[]        @relation("SizeCarts")
+  invoiceItems InvoiceItem[]
+  catalog      Catalog       @relation("CatalogSizes", fields: [catalogId], references: [id])
 
   @@map("sizes")
 }
 
-// Cart Model
 model Cart {
   id        Int      @id @default(autoincrement())
   userId    Int?     @map("user_id")
-  user      User?    @relation(fields: [userId], references: [id])
   guestId   String?  @map("guest_id")
   catalogId Int      @map("catalog_id")
-  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])
   sizeId    Int      @map("size_id")
-  size      Size     @relation("SizeCarts", fields: [sizeId], references: [id])
   quantity  Int
   createdAt DateTime @default(now()) @map("created_at")
   paymentId Int?     @map("payment_id")
+  catalog   Catalog  @relation("CatalogCarts", fields: [catalogId], references: [id])
   payment   Payment? @relation(fields: [paymentId], references: [id])
+  size      Size     @relation("SizeCarts", fields: [sizeId], references: [id])
+  user      User?    @relation(fields: [userId], references: [id])
 
-  @@index([userId], name: "idx_cart_user_id")
-  @@index([guestId], name: "idx_cart_guest_id")
+  @@index([userId], map: "idx_cart_user_id")
+  @@index([guestId], map: "idx_cart_guest_id")
   @@map("carts")
 }
 
-// Payment Model
 model Payment {
   id                Int      @id @default(autoincrement())
   userId            Int?     @map("user_id")
-  user              User?    @relation(fields: [userId], references: [id])
   amount            Float
   status            String
   createdAt         DateTime @default(now()) @map("created_at")
-  carts             Cart[]
-  midtransPaymentId String?  @map("midtrans_payment_id")
-  paymentMethod     String?  @map("payment_method")
   failureReason     String?  @map("failure_reason")
-  invoice           Invoice? @relation("InvoicePayment", fields: [invoiceId], references: [id])
   invoiceId         Int?     @unique @map("invoice_id")
+  paymentMethod     String?  @map("payment_method")
+  midtransPaymentId String?  @map("midtrans_payment_id")
+  carts             Cart[]
+  invoice           Invoice? @relation("InvoicePayment", fields: [invoiceId], references: [id])
+  user              User?    @relation(fields: [userId], references: [id])
   refunds           Refund[]
 
   @@map("payments")
 }
 
-// UserProfile Model
 model UserProfile {
-  id        Int       @id @default(autoincrement()) @map("uspro_id")
-  birthDate DateTime? @map("uspro_birth_date")
-  gender    String?   @map("uspro_gender")
-  addressId Int?      @map("uspro_addr_id")
-  userId    Int?      @unique @map("uspro_user_id")
-  address   Address?  @relation(fields: [addressId], references: [id])
+  birthDate DateTime?
+  createdAt DateTime  @default(now())
+  gender    String?
+  id        Int       @id @default(autoincrement())
+  updatedAt DateTime?
+  userId    Int?      @unique
+  addresses Address[]
   user      User?     @relation(fields: [userId], references: [id])
 
-  @@index([id], name: "pkey_user_profiles")
+  @@index([id], map: "pkey_user_profiles")
   @@map("user_profiles")
 }
 
-// Address Model
 model Address {
-  id           Int           @id @default(autoincrement())
-  street       String
-  city         String
-  state        String
-  postalCode   String
-  country      String
-  userProfiles UserProfile[]
+  id            Int          @id @default(autoincrement())
+  label         String?
+  street        String
+  city          String
+  state         String
+  postalCode    String
+  country       String?
+  isDefault     Boolean      @default(false)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime?
+  userProfileId Int?
+  userProfile   UserProfile? @relation(fields: [userProfileId], references: [id])
 
-  @@map("address")
+  @@map("addresses")
 }
 
-// Role Model
 model Role {
   id        Int        @id @default(autoincrement()) @map("role_id")
   name      String?    @unique @map("role_name")
   userRoles UserRole[]
 
-  @@index([id], name: "pkey_roles")
+  @@index([id], map: "pkey_roles")
   @@map("roles")
 }
 
-// UserRole Model
 model UserRole {
   userId Int
   roleId Int
-  user   User @relation(fields: [userId], references: [id])
   role   Role @relation(fields: [roleId], references: [id])
+  user   User @relation(fields: [userId], references: [id])
 
   @@id([userId, roleId])
   @@map("user_roles")
 }
 
-// UserPassword Model
 model UserPassword {
   id           Int     @id @default(autoincrement())
   userId       Int     @unique
@@ -157,7 +152,6 @@ model UserPassword {
   @@map("user_password")
 }
 
-// PaymentWebhook Model
 model PaymentWebhook {
   id              Int      @id @default(autoincrement())
   orderId         String   @map("order_id")
@@ -168,80 +162,89 @@ model PaymentWebhook {
   signatureKey    String   @map("signature_key")
   createdAt       DateTime @default(now()) @map("created_at")
 
-  @@index([orderId], name: "idx_webhook_order_id")
+  @@index([orderId], map: "idx_webhook_order_id")
   @@map("payment_webhooks")
 }
 
-// Invoice Model
 model Invoice {
-  id              Int           @id @default(autoincrement())
-  midtransOrderId String?       @unique @map("midtrans_order_id")
-  externalId      String?       @map("external_id")
-  status          String        @default("PENDING")
-  amount          Float         @map("amount")
-  currency        String        @default("IDR")
-  paymentUrl      String?       @map("payment_url")
-  createdAt       DateTime      @default(now()) @map("created_at")
-  updatedAt       DateTime      @updatedAt @map("updated_at")
-  items           InvoiceItem[]
-  userId          Int?          @map("user_id")
-  user            User?         @relation("UserInvoices", fields: [userId], references: [id])
-  paymentMethod   String?       @map("payment_method")
-  paymentStatus   String?       @map("payment_status")
-  payment         Payment?      @relation("InvoicePayment")
-  paymentId       Int?          @unique @map("payment_id")
-  // Add these fields to track which items need inventory updates
-  catalogId Int?
-  sizeId    Int?
-  @@index([midtransOrderId], name: "idx_invoice_midtrans_id")
-  @@index([userId], name: "idx_invoice_user_id")
+  id                    Int           @id @default(autoincrement())
+  status                String        @default("PENDING")
+  amount                Float         @map("amount")
+  currency              String        @default("IDR")
+  createdAt             DateTime      @default(now()) @map("created_at")
+  updatedAt             DateTime      @updatedAt @map("updated_at")
+  externalId            String?       @map("external_id")
+  userId                Int?          @map("user_id")
+  midtransOrderId       String?       @unique @map("midtrans_order_id")
+  paymentId             Int?          @unique @map("payment_id")
+  paymentMethod         String?       @map("payment_method")
+  paymentStatus         String?       @map("payment_status")
+  paymentUrl            String?       @map("payment_url")
+  catalogId             Int?
+  sizeId                Int?
+  midtransInvoicePdfUrl String?       @map("midtrans_invoice_pdf_url")
+  midtransInvoiceUrl    String?       @map("midtrans_invoice_url")
+  shippingAddress       String?
+  shippingCity          String?
+  shippingCountryCode   String?       @default("IDN")
+  shippingEmail         String?
+  shippingFirstName     String?
+  shippingLastName      String?
+  shippingPhone         String?
+  shippingPostalCode    String?
+  shippingProvince      String?
+  guestId               String?       @map("guest_id")
+  items                 InvoiceItem[]
+  user                  User?         @relation("UserInvoices", fields: [userId], references: [id])
+  payment               Payment?      @relation("InvoicePayment")
+
+  @@index([midtransOrderId], map: "idx_invoice_midtrans_id")
+  @@index([userId], map: "idx_invoice_user_id")
+  @@index([guestId], map: "idx_invoice_guest_id")
   @@map("invoices")
 }
 
-// InvoiceItem Model
 model InvoiceItem {
   id        Int     @id @default(autoincrement())
   invoiceId Int     @map("invoice_id")
-  invoice   Invoice @relation(fields: [invoiceId], references: [id])
   name      String
   quantity  Int
   price     Float
   currency  String
   catalogId Int?    @map("catalog_id")
   sizeId    Int?    @map("size_id")
+  invoice   Invoice @relation(fields: [invoiceId], references: [id])
   size      Size?   @relation(fields: [sizeId], references: [id])
 
   @@map("invoice_items")
 }
 
-// Customer Model
 model Customer {
   id          Int      @id @default(autoincrement())
   userId      Int?     @map("user_id")
-  user        User?    @relation(fields: [userId], references: [id])
   email       String?
   phoneNumber String?  @map("phone_number")
   givenNames  String?  @map("given_names")
   surname     String?
   createdAt   DateTime @default(now()) @map("created_at")
   updatedAt   DateTime @updatedAt @map("updated_at")
+  user        User?    @relation(fields: [userId], references: [id])
 
-  @@index([userId], name: "idx_customer_user_id")
+  @@index([userId], map: "idx_customer_user_id")
   @@map("customers")
 }
 
-// Refund Model
 model Refund {
   id        Int      @id @default(autoincrement())
   paymentId Int      @map("payment_id")
-  payment   Payment  @relation(fields: [paymentId], references: [id])
-  refundId  String   @unique @map("refund_id")
   status    String   @map("status")
   amount    Float    @map("amount")
   reason    String?  @map("reason")
   createdAt DateTime @default(now()) @map("created_at")
   updatedAt DateTime @updatedAt @map("updated_at")
+  refundId  String   @unique @map("refund_id")
+  payment   Payment  @relation(fields: [paymentId], references: [id])
 
-  @@index([refundId], name: "idx_refund_id")
+  @@index([refundId], map: "idx_refund_id")
   @@map("refunds")
 }

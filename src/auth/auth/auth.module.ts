@@ -1,12 +1,11 @@
 import { Module } from '@nestjs/common';
 import { JwtModule } from '@nestjs/jwt';
 import { PassportModule } from '@nestjs/passport';
-import { JwtStrategy } from './jwt.strategy';
-import { AuthService } from './auth/auth.service';
-import { AuthController } from './auth/auth.controller';
-import { AuthTokenController } from './auth.controller';
+
+import { JwtStrategy } from '../jwt.strategy'; // Import strategy JWT
+import { AuthService } from './auth.service';
+import { AuthController } from './auth.controller';
 import { UsersModule } from 'src/users/users.module';
-import { PrismaModule } from 'prisma/prisma.module';
 
 @Module({
   imports: [
@@ -16,10 +15,8 @@ import { PrismaModule } from 'prisma/prisma.module';
       signOptions: { expiresIn: '6h' }, // Token expired dalam 6 jam
     }),
     UsersModule, // Jangan lupa mengimpor UsersModule di sini
-    PrismaModule,
   ],
   providers: [AuthService, JwtStrategy],
-  controllers: [AuthController, AuthTokenController],
-  exports: [AuthService],
+  controllers: [AuthController],
 })
 export class AuthModule {}

@@ -26,15 +26,11 @@ export class DashboardService {
         // 2. Total Users
         this.prisma.user.count(),
         // 3. Total Products (Enabled)
-        this.prisma.catalog.count({
-          where: {
-            isEnabled: true,
-          },
-        }),
+        this.prisma.catalog.count(),
         // 4. Recent Sales (5 Terbaru, Status Settlement)
         this.prisma.invoice.findMany({
           where: {
-            status: 'settlement'
+            status: 'SETTLEMENT'
           },
           orderBy: {
             createdAt: 'desc'

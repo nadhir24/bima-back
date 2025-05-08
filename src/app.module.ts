@@ -13,6 +13,13 @@ import { JwtMiddleware } from './auth/jwt.middleware';
 import { AdminService } from './admin/admin.service';
 import { AdminController } from './admin/admin.controller';
 import { DashboardModule } from './dashboard/dashboard.module';
+import { PaymentController } from './payment/payment.controller';
+import { ServeStaticModule } from '@nestjs/serve-static'; // Import ServeStaticModule
+import { join } from 'path'; // Import join from path
+import { ScheduleModule } from '@nestjs/schedule'; // Import ScheduleModule
+import { CatalogController } from './catalog/catalog.controller';
+import { UserDashboardController } from './user-dashboard/user-dashboard.controller';
+import { UserDashboardModule } from './user-dashboard/user-dashboard.module';
 
 @Module({
   imports: [
@@ -20,6 +27,23 @@ import { DashboardModule } from './dashboard/dashboard.module';
       isGlobal: true,
       envFilePath: '.env', // Pastikan file .env di root directory
     }),
+    // Configure user images
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads', 'users'),
+      serveRoot: '/uploads/users',
+      serveStaticOptions: {
+        index: false,
+      },
+    }),
+    // Configure catalog images
+    ServeStaticModule.forRoot({
+      rootPath: join(process.cwd(), 'uploads', 'catalog_images'),
+      serveRoot: '/uploads/catalog_images',
+      serveStaticOptions: {
+        index: false,
+      },
+    }),
+    ScheduleModule.forRoot(), // Register ScheduleModule
     PrismaModule,
     UsersModule,
     CatalogModule,
@@ -27,22 +51,27 @@ import { DashboardModule } from './dashboard/dashboard.module';
     PaymentModule,
     AuthModule,
     JwtModule.register({
+      global: true,
       secret: process.env.JWT_SECRET_KEY,
-      signOptions: { expiresIn: '1h' }, // Token expired in 1 hour
+      signOptions: { expiresIn: '6h' }, // Token expired in 1 day
     }),
-    DashboardModule
+    DashboardModule,
+    UserDashboardModule,
   ],
   providers: [AdminService],
-  controllers: [AdminController],
+  controllers: [AdminController, PaymentController, UserDashboardController],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(JwtMiddleware)
-      .exclude(
+      .forRoutes(
         { path: 'users', method: RequestMethod.GET },
-        { path: 'users/:id', method: RequestMethod.GET }
-      )
-      .forRoutes(UsersController);
+        // { path: 'catalog', method: RequestMethod.GET },
+        { path: 'admin', method: RequestMethod.GET },
+        { path: 'dashboard', method: RequestMethod.GET },
+        UsersController,
+        // CatalogController,
+      );
   }
 }

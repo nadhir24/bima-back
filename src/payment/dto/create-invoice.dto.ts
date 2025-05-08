@@ -9,6 +9,7 @@ import {
   IsArray,
 } from 'class-validator';
 import { Type } from 'class-transformer';
+import { CreateShippingAddressDto } from './create-shipping-address.dto';
 
 // 1. CreateInvoiceCustomerAddressDto (DEKLARASIKAN PALING ATAS)
 export class CreateInvoiceCustomerAddressDto {
@@ -94,6 +95,10 @@ export class CreateInvoiceItemDto {
 
 // 4. CreateInvoiceDto (DEKLARASIKAN PALING BAWAH, SETELAH SEMUA DTO LAIN YANG DIPAKAI)
 export class CreateInvoiceDto {
+  @IsOptional()
+  @IsNumber()
+  userId?: number;
+
   @IsNotEmpty()
   @IsNumber()
   amount: number;
@@ -103,5 +108,27 @@ export class CreateInvoiceDto {
   @IsEnum(['IDR', 'USD'])
   currency: string;
 
-  // ... (dan seterusnya) ...
+  @IsNotEmpty()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => CreateInvoiceItemDto)
+  items: CreateInvoiceItemDto[];
+
+  @IsOptional()
+  @IsString()
+  guestId?: string;
+
+  @ValidateNested()
+  @Type(() => CreateInvoiceCustomerDto)
+  customer: CreateInvoiceCustomerDto;
+
+  @IsOptional()
+  @ValidateNested()
+  @Type(() => CreateShippingAddressDto)
+  shippingAddress?: CreateShippingAddressDto;
+
+  @IsOptional()
+  @IsNumber()
+  shippingCost?: number;
+
 }
