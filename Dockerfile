@@ -13,4 +13,5 @@ RUN npx prisma generate
 
 RUN npm run build
 
-CMD ["npm", "run", "start:prod"] 
+# Menggunakan path yang benar ke dist/src/main
+CMD ["node", "dist/src/main"] 

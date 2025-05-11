@@ -11,7 +11,7 @@
     "start": "nest start",
     "start:dev": "nest start --watch",
     "start:debug": "nest start --debug --watch",
-    "start:prod": "node dist/main",
+    "start:prod": "node dist/src/main",
     "prisma:push:force": "node -e \"try{require('fs').unlinkSync('.env')}catch(e){}\" && echo '--- All Env Vars ---' && node -e \"console.log(process.env)\" && echo '--- End Env Vars ---' && npx prisma db push",
     "db:push:public": "node -e \"try{require('fs').unlinkSync('.env')}catch(e){}\" && DATABASE_URL=\"$DATABASE_PUBLIC_URL\" npx prisma db push",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
