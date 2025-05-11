@@ -13,7 +13,7 @@
     "start:debug": "nest start --debug --watch",
     "start:prod": "node dist/main",
     "prisma:push:force": "node -e \"try{require('fs').unlinkSync('.env')}catch(e){}\" && npx prisma db push",
-    "db:push:public": "node -e \"try{require('fs').unlinkSync('.env')}catch(e){}\" && DATABASE_URL=\"$DATABASE_PUBLIC_URL\" npx prisma db push",
+    "db:push:public": "node -e \"try{require('fs').unlinkSync('.env')}catch(e){}\" && echo \"Attempting to use DATABASE_PUBLIC_URL: [$DATABASE_PUBLIC_URL]\" && npx prisma db push --schema=./prisma/schema.prisma",
     "lint": "eslint \"{src,apps,libs,test}/**/*.ts\" --fix",
     "test": "jest",
     "test:watch": "jest --watch",
