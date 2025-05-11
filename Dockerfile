@@ -8,8 +8,9 @@ RUN npm ci
 
 COPY . .
 
-RUN npm run build
-
+# Generate Prisma client before building
 RUN npx prisma generate
+
+RUN npm run build
 
 CMD ["npm", "run", "start:prod"] 
