@@ -1,9 +1,14 @@
 .env
+.env.*
 node_modules
 npm-debug.log
-Dockerfile
-.dockerignore
 .git
 .gitignore
+.github
+.vscode
+.idea
+dist
 README.md
-dist 
+uploads
+test
+postman 
