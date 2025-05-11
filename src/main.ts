@@ -17,7 +17,7 @@ import * as session from 'express-session';
 import { json, urlencoded } from 'express';
 import { join } from 'path';
 import * as express from 'express';
-import { existsSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 
 @Catch()
 class GlobalExceptionLogger implements ExceptionFilter {
@@ -68,6 +68,27 @@ async function bootstrap() {
     bodyParser: false,
   });
   const logger = new Logger('Bootstrap');
+
+  // Ensure upload directories exist
+  const uploadsDir = join(process.cwd(), 'uploads');
+  if (!existsSync(uploadsDir)) {
+    mkdirSync(uploadsDir, { recursive: true });
+  }
+
+  const catalogImagesDir = join(uploadsDir, 'catalog_images');
+  if (!existsSync(catalogImagesDir)) {
+    mkdirSync(catalogImagesDir, { recursive: true });
+  }
+
+  const usersDir = join(uploadsDir, 'users');
+  if (!existsSync(usersDir)) {
+    mkdirSync(usersDir, { recursive: true });
+  }
+
+  const usersImagesDir = join(usersDir, 'images');
+  if (!existsSync(usersImagesDir)) {
+    mkdirSync(usersImagesDir, { recursive: true });
+  }
 
   const port = process.env.PORT || 5000;
 

@@ -25,6 +25,13 @@ import { extname, join } from 'path';
           if (!existsSync(uploadPath)) {
             mkdirSync(uploadPath, { recursive: true });
           }
+          
+          // Ensure the images subfolder exists
+          const imagesPath = join(uploadPath, 'images');
+          if (!existsSync(imagesPath)) {
+            mkdirSync(imagesPath, { recursive: true });
+          }
+          
           cb(null, uploadPath);
         },
         filename: (req, file, cb) => {

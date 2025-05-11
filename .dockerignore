@@ -9,6 +9,10 @@ npm-debug.log
 .idea
 dist
 README.md
-uploads
+# Jangan mengabaikan direktori uploads, tetapi hanya file di dalamnya
+uploads/**/*.jpg
+uploads/**/*.jpeg
+uploads/**/*.png
+uploads/**/*.gif
 test
 postman 
