@@ -25,6 +25,12 @@ import { existsSync, unlink } from 'fs';
 import { UpdateUserDto } from './dto/UpdateUser.dto';
 import { CreateUserDto } from './dto/createUser.dto';
 
+// Helper function to ensure correct image URL format
+function normalizeImagePath(path: string): string {
+  // Ensure the path starts with a single slash
+  return path.replace(/^\/*/, '/');
+}
+
 @Controller('users')
 export class UsersController {
   constructor(private readonly usersService: UsersService) {}
@@ -117,7 +123,7 @@ export class UsersController {
           if (err) throw err;
         });
       }
-      finalImageUrl = `/uploads/users/${image.filename}`;
+      finalImageUrl = normalizeImagePath(`/uploads/users/${image.filename}`);
     } else {
       finalImageUrl = oldImage;
     }

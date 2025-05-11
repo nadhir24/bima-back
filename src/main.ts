@@ -117,11 +117,27 @@ async function bootstrap() {
     next();
   });
 
+  // Fix double slashes in URLs
   app.use((req, res, next) => {
     if (req.url.includes('//')) {
       const fixedUrl = req.url.replace(/\/+/g, '/');
       req.url = fixedUrl;
     }
+    next();
+  });
+
+  // Middleware untuk memperbaiki URL dalam respons API
+  app.use(function(req, res, next) {
+    const originalSend = res.send;
+    res.send = function(body) {
+      if (typeof body === 'string') {
+        // Fix URL dengan double slash dalam respons JSON
+        body = body.replace(/https?:\/\/[^\/]+\/\/uploads\//g, (match) => {
+          return match.replace('//', '/');
+        });
+      }
+      return originalSend.call(this, body);
+    };
     next();
   });
 

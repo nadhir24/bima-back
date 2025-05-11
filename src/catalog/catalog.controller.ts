@@ -51,6 +51,12 @@ function transformFormDataToDTO(formData: any): any {
   return transformedData;
 }
 
+// Helper function to ensure correct image URL format
+function normalizeImagePath(path: string): string {
+  // Ensure the path starts with a single slash
+  return path.replace(/^\/*/, '/');
+}
+
 @Controller('catalog')
 export class CatalogController {
   constructor(
@@ -85,7 +91,7 @@ export class CatalogController {
       )) as CreateCatalogDto;
 
       if (file) {
-        createCatalogDto.image = `/uploads/catalog_images/${file.filename}`;
+        createCatalogDto.image = normalizeImagePath(`/uploads/catalog_images/${file.filename}`);
       }
 
       const result = await this.catalogService.createCatalog(createCatalogDto);
@@ -125,7 +131,7 @@ export class CatalogController {
     @Res() res: any,
   ) {
     if (categorySlug === 'images') {
-      return res.redirect(`/uploads/catalog_images/${productSlug}`);
+      return res.redirect(normalizeImagePath(`/uploads/catalog_images/${productSlug}`));
     }
 
     const catalog = await this.catalogService.findBySlug(
@@ -184,7 +190,7 @@ export class CatalogController {
       )) as UpdateCatalogDto;
 
       if (file) {
-        updateCatalogDto.image = `/uploads/catalog_images/${file.filename}`;
+        updateCatalogDto.image = normalizeImagePath(`/uploads/catalog_images/${file.filename}`);
       }
 
       return this.catalogService.updateCatalog(+id, updateCatalogDto);
