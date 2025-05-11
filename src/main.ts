@@ -122,6 +122,11 @@ async function bootstrap() {
     if (req.url.includes('//')) {
       const fixedUrl = req.url.replace(/\/+/g, '/');
       req.url = fixedUrl;
+      
+      // Jika ini adalah URL gambar, arahkan ulang ke URL yang benar
+      if (req.url.match(/^\/uploads\/(catalog_images|users)\/.*\.(jpg|jpeg|png|gif)$/i)) {
+        return res.redirect(301, fixedUrl);
+      }
     }
     next();
   });
@@ -131,10 +136,10 @@ async function bootstrap() {
     const originalSend = res.send;
     res.send = function(body) {
       if (typeof body === 'string') {
-        // Fix URL dengan double slash dalam respons JSON
-        body = body.replace(/https?:\/\/[^\/]+\/\/uploads\//g, (match) => {
-          return match.replace('//', '/');
-        });
+        // Fix URL dengan pattern domain/[/]uploads/ dalam respons JSON
+        body = body.replace(/([^/]):\/\/([^/]+)\/+uploads\//g, '$1://$2/uploads/');
+        // Ganti juga pattern yang spesifik dari error yang dilihat
+        body = body.replace(/\/\/uploads\//g, '/uploads/');
       }
       return originalSend.call(this, body);
     };
@@ -164,8 +169,13 @@ async function bootstrap() {
   app.enableCors({
     origin: (origin, callback) => {
       const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',');
-  
-      if (!origin || allowedOrigins.includes(origin)) {
+      
+      // Tambahkan wildcard untuk akses gambar
+      if (
+        !origin || 
+        allowedOrigins.includes(origin) || 
+        origin.includes('vercel.app')
+      ) {
         callback(null, true);
       } else {
         callback(new Error('Not allowed by CORS'));
@@ -173,6 +183,7 @@ async function bootstrap() {
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
     credentials: true,
+    exposedHeaders: ['Content-Disposition'], // Untuk download gambar
   });
   
 

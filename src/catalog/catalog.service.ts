@@ -9,6 +9,19 @@ import { UpdateCatalogDto } from './dto/update-catalog.dto';
 export class CatalogService {
   constructor(private prisma: PrismaService) {}
 
+  // Helper function untuk memastikan URL gambar tidak memiliki double slash
+  private fixImageUrl(catalog: any): any {
+    if (catalog && catalog.image && catalog.image.startsWith('/')) {
+      catalog.image = catalog.image.replace(/^\/+/, '/');
+    }
+    return catalog;
+  }
+
+  // Helper function untuk memastikan URL gambar tidak memiliki double slash pada array
+  private fixImageUrls(catalogs: any[]): any[] {
+    return catalogs.map(catalog => this.fixImageUrl(catalog));
+  }
+
    createSlug(
     name: string,
     category: string,
@@ -41,12 +54,13 @@ export class CatalogService {
       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
 
-    return catalog;
+    return this.fixImageUrl(catalog);
   }
 
 
   async findAll(): Promise<Catalog[]> {
-    return this.prisma.catalog.findMany({ include: { sizes: true } });
+    const catalogs = await this.prisma.catalog.findMany({ include: { sizes: true } });
+    return this.fixImageUrls(catalogs);
   }
 
 
@@ -60,7 +74,7 @@ export class CatalogService {
       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
 
-    return catalog;
+    return this.fixImageUrl(catalog);
   }
 
 
@@ -130,7 +144,7 @@ export class CatalogService {
         include: { sizes: true },
       });
 
-      return result;
+      return this.fixImageUrl(result);
     } catch (error) {
       if (error instanceof Prisma.PrismaClientKnownRequestError) {
         if (error.code === 'P2002') {
@@ -197,11 +211,13 @@ export class CatalogService {
       await this.handleSizesUpdate(id, updateCatalogDto.sizes);
     }
 
-    return this.prisma.catalog.update({
+    const updated = await this.prisma.catalog.update({
       where: { id },
       data: updateData,
       include: { sizes: true },
     });
+    
+    return this.fixImageUrl(updated);
   }
 
 
@@ -302,7 +318,7 @@ export class CatalogService {
           where: { id: catalogId },
         });
 
-        return deletedCatalog;
+        return this.fixImageUrl(deletedCatalog);
       });
     } catch (error) {
       if (
@@ -464,7 +480,7 @@ export class CatalogService {
       return nameMatch || categorySlugMatch || productSlugMatch;
     });
 
-    return filteredCatalogs;
+    return this.fixImageUrls(filteredCatalogs);
   }
 
  
@@ -474,6 +490,6 @@ export class CatalogService {
       include: { sizes: true },
     });
 
-    return catalogs;
+    return this.fixImageUrls(catalogs);
   }
 }
