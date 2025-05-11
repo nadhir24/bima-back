@@ -4,8 +4,12 @@ import { PrismaClient } from '@prisma/client';
 @Injectable()
 export class PrismaService extends PrismaClient implements OnModuleInit, OnModuleDestroy {
   async onModuleInit() {
-    await this.$connect();
-    await this.seedRoles(); // Panggil fungsi seeding untuk role
+    try {
+      await this.$connect();
+      await this.seedRoles();
+    } catch (err) {
+      console.error("Gagal konek ke database atau seed roles:", err);
+    }
   }
 
   async onModuleDestroy() {
