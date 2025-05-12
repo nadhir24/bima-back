@@ -109,6 +109,19 @@ async function bootstrap() {
     }),
   );
 
+  // Configure static file serving for uploads directory with proper headers
+  app.useStaticAssets(join(process.cwd(), 'uploads'), {
+    prefix: '/uploads',
+    setHeaders: (res, path) => {
+      if (path.endsWith('.jpg') || path.endsWith('.jpeg') || path.endsWith('.png') || path.endsWith('.gif')) {
+        // Set Cache-Control headers for images
+        res.setHeader('Cache-Control', 'public, max-age=31536000');
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+      }
+    }
+  });
+
   app.use((req, res, next) => {
     if (req.url.match(/^\/uploads\/(catalog_images|users)\/index\.html$/i)) {
       res.status(404).send('Not Found');
@@ -155,6 +168,10 @@ async function bootstrap() {
       const imagePath = join(process.cwd(), req.url);
 
       if (!existsSync(imagePath)) {
+        // Send a default image or 404 with proper CORS headers
+        res.setHeader('Access-Control-Allow-Origin', '*');
+        res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+        return res.status(404).send('Image not found');
       }
     }
     next();
@@ -167,23 +184,12 @@ async function bootstrap() {
   });
 
   app.enableCors({
-    origin: (origin, callback) => {
-      const allowedOrigins = (process.env.ALLOWED_ORIGINS || '').split(',');
-      
-      // Tambahkan wildcard untuk akses gambar
-      if (
-        !origin || 
-        allowedOrigins.includes(origin) || 
-        origin.includes('vercel.app')
-      ) {
-        callback(null, true);
-      } else {
-        callback(new Error('Not allowed by CORS'));
-      }
-    },
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH'],
+    origin: true, // Allow all origins for image requests
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
     credentials: true,
-    exposedHeaders: ['Content-Disposition'], // Untuk download gambar
+    exposedHeaders: ['Content-Disposition', 'Content-Type'],
+    allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+    maxAge: 86400, // 24 hours
   });
   
 
