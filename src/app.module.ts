@@ -17,9 +17,6 @@ import { PaymentController } from './payment/payment.controller';
 import { ServeStaticModule } from '@nestjs/serve-static'; // Import ServeStaticModule
 import { join } from 'path'; // Import join from path
 import { ScheduleModule } from '@nestjs/schedule'; // Import ScheduleModule
-import { CatalogController } from './catalog/catalog.controller';
-import { UserDashboardController } from './user-dashboard/user-dashboard.controller';
-import { UserDashboardModule } from './user-dashboard/user-dashboard.module';
 
 @Module({
   imports: [
@@ -27,20 +24,13 @@ import { UserDashboardModule } from './user-dashboard/user-dashboard.module';
       isGlobal: true,
       envFilePath: '.env', // Pastikan file .env di root directory
     }),
-    // Configure user images
+    // Configure static file serving for user images
     ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'uploads', 'users'),
-      serveRoot: '/uploads/users',
+      rootPath: join(process.cwd(), 'uploads', 'users'), // Directory where user images are stored
+      serveRoot: '/uploads/users', // <<<=== UBAH INI: Sesuaikan dengan next.config.js
       serveStaticOptions: {
-        index: false,
-      },
-    }),
-    // Configure catalog images
-    ServeStaticModule.forRoot({
-      rootPath: join(process.cwd(), 'uploads', 'catalog_images'),
-      serveRoot: '/uploads/catalog_images',
-      serveStaticOptions: {
-        index: false,
+        // Optional: Add cache control headers, etc.
+        // index: false, // Don't serve index.html
       },
     }),
     ScheduleModule.forRoot(), // Register ScheduleModule
@@ -51,25 +41,30 @@ import { UserDashboardModule } from './user-dashboard/user-dashboard.module';
     PaymentModule,
     AuthModule,
     JwtModule.register({
-      global: true,
       secret: process.env.JWT_SECRET_KEY,
-      signOptions: { expiresIn: '6h' }, // Token expired in 1 day
+      signOptions: { expiresIn: '1d' }, // Token expired in 1 day
     }),
     DashboardModule,
-    UserDashboardModule,
   ],
   providers: [AdminService],
-  controllers: [AdminController, PaymentController, UserDashboardController],
+  controllers: [AdminController],
 })
 export class AppModule {
   configure(consumer: MiddlewareConsumer) {
     consumer
       .apply(JwtMiddleware)
-      .forRoutes(
+      .exclude(
         { path: 'users', method: RequestMethod.GET },
-        { path: 'admin', method: RequestMethod.GET },
-        { path: 'dashboard', method: RequestMethod.GET },
-        UsersController,
-      );
+        { path: 'users/:id', method: RequestMethod.GET },
+        { path: 'users/delete/:id', method: RequestMethod.DELETE },
+        { path: 'users/:userId/addresses', method: RequestMethod.GET },
+        //         { path: 'payment/invoice/notifications', method: RequestMethod.GET },
+        //         { path: 'payment/invoice/guest/:invoiceId', method: RequestMethod.GET },
+        //         { path: 'payment/invoice/user/:invoiceId', method: RequestMethod.GET },
+        //         { path: 'payment/invoice/admin', method: RequestMethod.GET },
+        //         { path: 'payment/invoice/admin/:invoiceId', method: RequestMethod.GET },
+        // {path:'/payment/invoice/:invoiceId/void', method: RequestMethod.POST}
+      )
+      .forRoutes(UsersController, PaymentController);
   }
 }
