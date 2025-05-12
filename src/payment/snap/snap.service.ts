@@ -629,38 +629,55 @@ export class SnapService {
             );
 
             const midtransAuth = `Basic ${Buffer.from(serverKey + ':').toString('base64')}`;
-
-            const midtransInvoice = await axios.post(
-              `${this.midtransApiUrl}/v1/invoices`,
-              invoicePayload,
-              {
-                // Fix: Use explicit headers with midtransAuth
+            
+            this.logger.debug(`Making API call to ${this.midtransApiUrl}/v1/invoices`);
+            this.logger.debug(`Using auth header: ${midtransAuth.substring(0, 15)}...`);
+            
+            try {
+              const midtransInvoice = await axios({
+                method: 'post',
+                url: `${this.midtransApiUrl}/v1/invoices`,
                 headers: {
                   'Content-Type': 'application/json',
                   Accept: 'application/json',
                   Authorization: midtransAuth,
                 },
-              },
-            );
+                data: invoicePayload,
+                timeout: 10000, // 10 seconds timeout
+              });
+              
+              this.logger.debug(`✅ Midtrans API response success:`, {
+                status: midtransInvoice.status,
+                statusText: midtransInvoice.statusText,
+              });
+              this.logger.debug(`Response data:`, midtransInvoice.data);
 
-            this.logger.debug('Midtrans Invoice created successfully', {
-              invoiceId: midtransInvoice.data.id,
-              pdfUrl: midtransInvoice.data.pdf_url,
-              paymentLink: midtransInvoice.data.payment_link_url,
-            });
-
-            // Update local invoice with Midtrans Invoice details
-            updatedInvoice = await this.prisma.invoice.update({
-              where: { id: updatedInvoice.id },
-              data: {
-                midtransInvoiceUrl: midtransInvoice.data.payment_link_url,
-                midtransInvoicePdfUrl: midtransInvoice.data.pdf_url,
-              },
-              include: { payment: true, items: true, user: true },
-            });
-            this.logger.debug(
-              'Local invoice updated with Midtrans Invoice URLs',
-            );
+              if (midtransInvoice.data && midtransInvoice.data.payment_link_url && midtransInvoice.data.pdf_url) {
+                // Update local invoice with Midtrans Invoice details
+                updatedInvoice = await this.prisma.invoice.update({
+                  where: { id: updatedInvoice.id },
+                  data: {
+                    midtransInvoiceUrl: midtransInvoice.data.payment_link_url,
+                    midtransInvoicePdfUrl: midtransInvoice.data.pdf_url,
+                  },
+                  include: { payment: true, items: true, user: true },
+                });
+                this.logger.debug(
+                  '✅ Invoice URLs saved to database successfully',
+                );
+              } else {
+                this.logger.error('❌ Midtrans response missing required URLs', midtransInvoice.data);
+              }
+            } catch (axiosError) {
+              this.logger.error('❌ Axios error in Midtrans API call:', {
+                message: axiosError.message,
+                code: axiosError.code,
+                response: axiosError.response?.data,
+                status: axiosError.response?.status,
+                headers: axiosError.response?.headers,
+              });
+              throw axiosError;
+            }
           } catch (invoiceError) {
             this.logger.error('Failed to create Midtrans Invoice:', {
               orderId: order_id,
@@ -740,6 +757,8 @@ export class SnapService {
 
   async generateInvoiceManually(orderId: string) {
     try {
+      this.logger.log(`🔄 Manual invoice generation requested for order ID: ${orderId}`);
+      
       const invoice = await this.prisma.invoice.findUnique({
         where: { midtransOrderId: orderId },
         include: {
@@ -749,15 +768,30 @@ export class SnapService {
       });
 
       if (!invoice) {
+        this.logger.error(`❌ Invoice not found for order ID: ${orderId}`);
         throw new NotFoundException(
           `Invoice with order ID ${orderId} not found`,
         );
       }
 
-      if (invoice.status !== 'settlement') {
+      this.logger.log(`📄 Found invoice ID: ${invoice.id}, Status: ${invoice.status}`);
+      
+      // Only generate for settlement status - check all variations of the status
+      if (invoice.status.toUpperCase() !== 'SETTLEMENT') {
+        this.logger.error(`❌ Cannot generate invoice for non-settled transaction: ${invoice.status}`);
         throw new BadRequestException(
           'Can only generate invoice for settled transactions',
         );
+      }
+
+      // Check if invoice already has URLs
+      if (invoice.midtransInvoiceUrl && invoice.midtransInvoicePdfUrl) {
+        this.logger.log(`⚠️ Invoice already has URLs, returning existing data`);
+        return {
+          success: true,
+          data: invoice,
+          message: 'Invoice already exists',
+        };
       }
 
       // Prepare customer details
@@ -766,6 +800,8 @@ export class SnapService {
         customerDetails.id = invoice.userId.toString();
         customerDetails.name = invoice.user.fullName;
         customerDetails.email = invoice.user.email;
+        
+        // Format phone number correctly for Midtrans
         let phone = invoice.user.phoneNumber;
         if (phone) {
           phone = phone.replace(/\D/g, '');
@@ -779,13 +815,19 @@ export class SnapService {
           }
         }
         customerDetails.phone = phone;
+      } else {
+        // Handle guest user case
+        customerDetails.id = `GUEST-${invoice.id}`;
+        customerDetails.name = invoice.shippingFirstName ? 
+          `${invoice.shippingFirstName} ${invoice.shippingLastName || ''}`.trim() : 'Guest';
+        customerDetails.email = invoice.shippingEmail || 'guest@example.com';
+        customerDetails.phone = invoice.shippingPhone ? invoice.shippingPhone.replace(/^\+/, '') : '628000000000';
       }
 
       // Prepare item details
       const itemDetails = invoice.items
         .filter((item) => item.name !== 'Biaya Pengiriman')
         .map((item) => ({
-          item_id: item.catalogId?.toString() || `ITEM-${item.id}`,
           description: item.name,
           quantity: item.quantity,
           price: item.price,
@@ -803,7 +845,13 @@ export class SnapService {
       const invoiceDate = new Date();
 
       const formatDateForMidtrans = (date: Date) => {
-        return date.toISOString().replace('T', ' ').substring(0, 19) + ' +0700';
+        const year = date.getFullYear();
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const day = String(date.getDate()).padStart(2, '0');
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        const seconds = String(date.getSeconds()).padStart(2, '0');
+        return `${year}-${month}-${day} ${hours}:${minutes}:${seconds} +0700`;
       };
 
       // Tambahkan due_date (30 hari dari sekarang)
@@ -823,44 +871,76 @@ export class SnapService {
         },
       };
 
-      // Perbaiki format phone untuk manual invoice generation
+      // Ensure phone doesn't have leading + character
       if (customerDetails.phone && customerDetails.phone.startsWith('+')) {
         customerDetails.phone = customerDetails.phone.substring(1);
       }
 
-      const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
-      const midtransAuth = `Basic ${Buffer.from(serverKey + ':').toString('base64')}`;
+      this.logger.log(`📤 Sending invoice payload to Midtrans: ${JSON.stringify(invoicePayload, null, 2)}`);
 
-      const response = await axios.post(
-        `${this.midtransApiUrl}/v1/invoices`,
-        invoicePayload,
-        {
+      const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
+      if (!serverKey) {
+        throw new InternalServerErrorException('Server key not found in configuration');
+      }
+      
+      const midtransAuth = `Basic ${Buffer.from(serverKey + ':').toString('base64')}`;
+      
+      this.logger.debug(`Making API call to ${this.midtransApiUrl}/v1/invoices`);
+      this.logger.debug(`Using auth header: ${midtransAuth.substring(0, 15)}...`);
+
+      try {
+        const response = await axios({
+          method: 'post',
+          url: `${this.midtransApiUrl}/v1/invoices`,
           headers: {
             'Content-Type': 'application/json',
             Accept: 'application/json',
             Authorization: midtransAuth,
           },
-        },
-      );
+          data: invoicePayload,
+          timeout: 15000, // 15 seconds timeout
+        });
+        
+        this.logger.log(`✅ Midtrans response received: Status ${response.status}`);
+        this.logger.debug(`Response data:`, response.data);
+        
+        if (!response.data.payment_link_url || !response.data.pdf_url) {
+          this.logger.error('❌ Midtrans response missing required URLs', response.data);
+          throw new InternalServerErrorException('Invalid response from Midtrans API - missing URLs');
+        }
 
-      // Update invoice with new URLs
-      const updatedInvoice = await this.prisma.invoice.update({
-        where: { id: invoice.id },
-        data: {
-          midtransInvoiceUrl: response.data.payment_link_url,
-          midtransInvoicePdfUrl: response.data.pdf_url,
-        },
-        include: {
-          items: true,
-          user: true,
-        },
-      });
+        // Update invoice with new URLs
+        const updatedInvoice = await this.prisma.invoice.update({
+          where: { id: invoice.id },
+          data: {
+            midtransInvoiceUrl: response.data.payment_link_url,
+            midtransInvoicePdfUrl: response.data.pdf_url,
+          },
+          include: {
+            items: true,
+            user: true,
+          },
+        });
+        
+        this.logger.log(`💾 Invoice URLs saved successfully to database`);
 
-      return {
-        success: true,
-        data: updatedInvoice,
-        message: 'Invoice generated successfully',
-      };
+        return {
+          success: true,
+          data: updatedInvoice,
+          message: 'Invoice generated successfully',
+        };
+      } catch (axiosError) {
+        this.logger.error('❌ Axios error in Midtrans API call:', {
+          message: axiosError.message,
+          code: axiosError.code,
+          response: axiosError.response?.data,
+          status: axiosError.response?.status,
+          headers: axiosError.response?.headers,
+        });
+        throw new InternalServerErrorException(
+          `Failed to generate invoice: ${axiosError.message}`,
+        );
+      }
     } catch (error) {
       this.logger.error('Error generating invoice manually:', {
         error: error.message,
@@ -870,7 +950,8 @@ export class SnapService {
 
       if (
         error instanceof NotFoundException ||
-        error instanceof BadRequestException
+        error instanceof BadRequestException ||
+        error instanceof InternalServerErrorException
       ) {
         throw error;
       }
