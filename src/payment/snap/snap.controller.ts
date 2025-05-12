@@ -58,14 +58,29 @@ export class SnapController {
 
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  async handleWebhook(@Body() body: any): Promise<any> {
+  async handleWebhook(@Body() body: any, @Headers() headers: any): Promise<any> {
     try {
+      console.log('WEBHOOK RECEIVED', new Date().toISOString());
+      console.log('Webhook Payload:', JSON.stringify(body));
+      console.log('Webhook Headers:', JSON.stringify(headers));
+      console.log('FRONTEND_URL:', process.env.FRONTEND_URL);
+      console.log('SERVER URL:', process.env.SERVER_URL || 'Not set');
+      
+      // Log perubahan status
+      if (body.transaction_status) {
+        console.log(`Order ${body.order_id} status: ${body.transaction_status}`);
+      }
+      
       const result = await this.snapService.handleWebhook(body); 
+      
+      console.log('Webhook processing result:', JSON.stringify(result));
+      
       return {
         success: true,
         data: result,
       };
     } catch (error) {
+      console.error('Webhook Error:', error.message, error.stack);
       return {
         success: false,
         message: error.message,
