@@ -39,7 +39,7 @@ export class CartController {
             id: cart.catalog.id,
             name: cart.catalog.name,
             image: cart.catalog.image
-              ? `http://localhost:5000${cart.catalog.image}`
+              ? cart.catalog.image
               : null,
           }
         : null,
