@@ -76,7 +76,7 @@ export class SnapService {
     );
 
     this.snap = new Snap({
-      isProduction: false,
+      isProduction: this.configService.get<string>('MIDTRANS_IS_PRODUCTION') === 'true',
       serverKey: serverKey,
       clientKey: this.configService.get<string>('MIDTRANS_CLIENT_KEY'),
     });
