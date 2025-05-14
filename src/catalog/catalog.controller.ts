@@ -252,7 +252,7 @@ export class CatalogController {
         // Also update the primary image for backward compatibility
         const existingProduct = await this.catalogService.findOne(+id);
         const allImages = [
-          ...(existingProduct.productImages?.map(img => img.imageUrl) || []),
+          ...((existingProduct as any).productImages?.map(img => img.imageUrl) || []),
           ...updateCatalogDto.images
         ];
         

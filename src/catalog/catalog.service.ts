@@ -420,7 +420,7 @@ export class CatalogService {
       
       // Handle image deletion if specified
       if (updateCatalogDto.imagesToDelete && updateCatalogDto.imagesToDelete.length > 0) {
-        await this.prisma.productImage.deleteMany({
+        await (this.prisma as any).productImage.deleteMany({
           where: {
             id: {
               in: updateCatalogDto.imagesToDelete
@@ -430,19 +430,19 @@ export class CatalogService {
         });
         
         // If we deleted the main image, set a new one
-        const deletedMainImage = existingCatalog.productImages?.some(
+        const deletedMainImage = (existingCatalog as any).productImages?.some(
           img => img.isMain && updateCatalogDto.imagesToDelete?.includes(img.id)
         );
         
         if (deletedMainImage) {
           // Get remaining images
-          const remainingImages = await this.prisma.productImage.findMany({
+          const remainingImages = await (this.prisma as any).productImage.findMany({
             where: { catalogId: id }
           });
           
           if (remainingImages.length > 0) {
             // Set first remaining image as main
-            await this.prisma.productImage.update({
+            await (this.prisma as any).productImage.update({
               where: { id: remainingImages[0].id },
               data: { isMain: true }
             });
@@ -458,7 +458,7 @@ export class CatalogService {
         updateCatalogDto.mainImageIndex !== undefined && 
         (!updateCatalogDto.images || updateCatalogDto.images.length === 0)
       ) {
-        const images = await this.prisma.productImage.findMany({
+        const images = await (this.prisma as any).productImage.findMany({
           where: { catalogId: id }
         });
         
@@ -466,13 +466,13 @@ export class CatalogService {
           const newMainIndex = Math.min(updateCatalogDto.mainImageIndex, images.length - 1);
           
           // Reset all to not main
-          await this.prisma.productImage.updateMany({
+          await (this.prisma as any).productImage.updateMany({
             where: { catalogId: id },
             data: { isMain: false }
           });
           
           // Set the new main image
-          await this.prisma.productImage.update({
+          await (this.prisma as any).productImage.update({
             where: { id: images[newMainIndex].id },
             data: { isMain: true }
           });
@@ -744,13 +744,13 @@ export class CatalogService {
                   gte: startDate,
                   lte: endOfEndDate,
                 }
-              },
+              } as any,
             ]
           },
           include: { 
             sizes: true,
             productImages: true
-          },
+          } as any,
           skip,
           take: Number(limit),
         }),
@@ -762,7 +762,7 @@ export class CatalogService {
                   gte: startDate,
                   lte: endOfEndDate,
                 }
-              },
+              } as any,
             ]
           },
         }),
