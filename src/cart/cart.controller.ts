@@ -245,14 +245,40 @@ export class CartController {
   async getGuestSession(@Req() req: Request, @Res() res: Response) {
     const guestId = req.sessionID;
     
-    // Delete any existing cart items for this new guest ID
-    // to ensure a fresh start with an empty cart
-    await this.cartService.removeManyCarts({
-      where: { guestId: guestId }
-    });
-    
-    // Return the guest ID
-    res.send({ guestId: guestId });
+    try {
+      // Langkah 1: Delete semua item keranjang untuk guest ID ini
+      await this.cartService.removeManyCarts({
+        where: { guestId: guestId }
+      });
+      
+      // Langkah 2: Verifikasi semua item sudah terhapus dengan membaca ulang
+      const remainingItems = await this.cartService.findManyCarts({
+        where: { guestId: guestId }
+      });
+      
+      // Jika masih ada item tersisa, paksa hapus sekali lagi
+      if (remainingItems.length > 0) {
+        console.warn(`Found ${remainingItems.length} remaining items after cleanup for guestId=${guestId}, forcing delete again`);
+        await this.cartService.removeManyCarts({
+          where: { guestId: guestId }
+        });
+      }
+      
+      // Langkah 3: Return the guest ID
+      res.send({ 
+        guestId: guestId,
+        isClean: true, 
+        message: "New guest session created with empty cart" 
+      });
+    } catch (error) {
+      // Jika terjadi error saat pembersihan, tetap kirim guestId tetapi beri tahu klien
+      console.error(`Error cleaning up cart for guestId=${guestId}:`, error);
+      res.status(200).send({ 
+        guestId: guestId,
+        isClean: false,
+        message: "Guest session created but cart cleanup might be incomplete" 
+      });
+    }
   }
 
   @Get('count')
@@ -338,6 +364,36 @@ export class CartController {
         success: false,
         message: error.message || 'Failed to clean up expired guest sessions',
         statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
+  // Endpoint baru untuk menghapus semua item di keranjang guest secara otomatis
+  @Delete('clear-guest-cart')
+  async clearGuestCart(@Req() req: Request, @Query('guestId') guestIdParam?: string) {
+    try {
+      // Prioritaskan guestId dari query dulu, jika tidak ada gunakan sessionID
+      const guestId = guestIdParam || req.sessionID;
+      
+      if (!guestId) {
+        throw new BadRequestException('Guest ID is required');
+      }
+      
+      // Hapus semua item keranjang untuk guestId ini
+      const result = await this.cartService.removeManyCarts({
+        where: { guestId }
+      });
+      
+      return {
+        success: true,
+        message: `Successfully cleared guest cart with ${result.count} items`,
+        count: result.count
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Failed to clear guest cart',
+        statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR
       };
     }
   }
