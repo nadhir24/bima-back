@@ -59,6 +59,21 @@ export class CreateCatalogDto {
   @IsString()
   @IsOptional()
   image?: string;
+  
+  @IsArray()
+  @IsOptional()
+  images?: string[] = [];
+  
+  @IsNumber()
+  @IsOptional()
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const parsed = parseInt(value, 10);
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return typeof value === 'number' ? value : 0;
+  })
+  mainImageIndex?: number = 0;
 
   @IsOptional()
   @IsString()

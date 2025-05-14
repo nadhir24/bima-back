@@ -27,17 +27,18 @@ model User {
 }
 
 model Catalog {
-  id           Int     @id @default(autoincrement())
+  id           Int           @id @default(autoincrement())
   name         String
-  slug         String  @unique
+  slug         String        @unique
   category     String
   categorySlug String
   description  String
   isEnabled    Boolean
   image        String?
   productSlug  String
-  carts        Cart[]  @relation("CatalogCarts")
-  sizes        Size[]  @relation("CatalogSizes")
+  carts        Cart[]        @relation("CatalogCarts")
+  sizes        Size[]        @relation("CatalogSizes")
+  productImages ProductImage[] @relation("CatalogImages")
 
   @@map("catalogs")
 }
@@ -247,4 +248,15 @@ model Refund {
 
   @@index([refundId], map: "idx_refund_id")
   @@map("refunds")
+}
+
+model ProductImage {
+  id        Int      @id @default(autoincrement())
+  imageUrl  String
+  catalogId Int
+  isMain    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  catalog   Catalog  @relation("CatalogImages", fields: [catalogId], references: [id], onDelete: Cascade)
+
+  @@map("product_images")
 }

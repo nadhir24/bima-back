@@ -11,6 +11,7 @@ import {
   HttpStatus,
   UseInterceptors,
   UploadedFile,
+  UploadedFiles,
   ParseFilePipe,
   FileTypeValidator,
   MaxFileSizeValidator,
@@ -18,7 +19,7 @@ import {
   forwardRef,
   Res,
 } from '@nestjs/common';
-import { FileInterceptor } from '@nestjs/platform-express';
+import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
 import { CatalogService } from './catalog.service';
 import { CreateCatalogDto } from './dto/create-catalog.dto';
 import { UpdateCatalogDto } from './dto/update-catalog.dto';
@@ -37,6 +38,21 @@ function transformFormDataToDTO(formData: any): any {
         'Invalid sizes format. Expected a valid JSON array.',
         HttpStatus.BAD_REQUEST,
       );
+    }
+  }
+  
+  if (typeof transformedData.mainImageIndex === 'string') {
+    transformedData.mainImageIndex = parseInt(transformedData.mainImageIndex, 10);
+    if (isNaN(transformedData.mainImageIndex)) {
+      transformedData.mainImageIndex = 0;
+    }
+  }
+  
+  if (typeof transformedData.imagesToDelete === 'string') {
+    try {
+      transformedData.imagesToDelete = JSON.parse(transformedData.imagesToDelete);
+    } catch (error) {
+      transformedData.imagesToDelete = [];
     }
   }
 
@@ -67,11 +83,19 @@ export class CatalogController {
   ) {}
 
   @Post()
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FilesInterceptor('images', 10))
   async create(
     @Body() formData: any,
-    @UploadedFile()
-    file?: Express.Multer.File,
+    @UploadedFiles(
+      new ParseFilePipe({
+        validators: [
+          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
+          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
+        ],
+        fileIsRequired: false,
+      }),
+    )
+    files?: Express.Multer.File[],
   ) {
     try {
       const transformedData = transformFormDataToDTO(formData);
@@ -90,8 +114,18 @@ export class CatalogController {
         { metatype: CreateCatalogDto, type: 'body' },
       )) as CreateCatalogDto;
 
-      if (file) {
-        createCatalogDto.image = normalizeImagePath(`/uploads/catalog_images/${file.filename}`);
+      if (files && files.length > 0) {
+        createCatalogDto.images = files.map(file => 
+          normalizeImagePath(`/uploads/catalog_images/${file.filename}`)
+        );
+        
+        // Also set the primary image for backward compatibility
+        if (createCatalogDto.images.length > 0) {
+          const mainIndex = createCatalogDto.mainImageIndex || 0;
+          createCatalogDto.image = createCatalogDto.images[
+            Math.min(mainIndex, createCatalogDto.images.length - 1)
+          ];
+        }
       }
 
       const result = await this.catalogService.createCatalog(createCatalogDto);
@@ -159,11 +193,11 @@ export class CatalogController {
   }
 
   @Patch(':id')
-  @UseInterceptors(FileInterceptor('image'))
+  @UseInterceptors(FilesInterceptor('images', 10))
   async update(
     @Param('id') id: string,
     @Body() formData: any,
-    @UploadedFile(
+    @UploadedFiles(
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
@@ -172,7 +206,7 @@ export class CatalogController {
         fileIsRequired: false,
       }),
     )
-    file?: Express.Multer.File,
+    files?: Express.Multer.File[],
   ) {
     try {
       const transformedData = transformFormDataToDTO(formData);
@@ -189,8 +223,24 @@ export class CatalogController {
         { metatype: UpdateCatalogDto, type: 'body' },
       )) as UpdateCatalogDto;
 
-      if (file) {
-        updateCatalogDto.image = normalizeImagePath(`/uploads/catalog_images/${file.filename}`);
+      if (files && files.length > 0) {
+        updateCatalogDto.images = files.map(file => 
+          normalizeImagePath(`/uploads/catalog_images/${file.filename}`)
+        );
+        
+        // Also update the primary image for backward compatibility
+        const existingProduct = await this.catalogService.findOne(+id);
+        const allImages = [
+          ...(existingProduct.productImages?.map(img => img.imageUrl) || []),
+          ...updateCatalogDto.images
+        ];
+        
+        if (allImages.length > 0) {
+          const mainIndex = updateCatalogDto.mainImageIndex || 0;
+          updateCatalogDto.image = allImages[
+            Math.min(mainIndex, allImages.length - 1)
+          ];
+        }
       }
 
       return this.catalogService.updateCatalog(+id, updateCatalogDto);

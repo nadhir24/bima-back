@@ -14,6 +14,17 @@ export class CatalogService {
     if (catalog && catalog.image && catalog.image.startsWith('/')) {
       catalog.image = catalog.image.replace(/^\/+/, '/');
     }
+    
+    // Fix image URLs in productImages array
+    if (catalog && catalog.productImages && Array.isArray(catalog.productImages)) {
+      catalog.productImages = catalog.productImages.map(img => {
+        if (img.imageUrl && img.imageUrl.startsWith('/')) {
+          img.imageUrl = img.imageUrl.replace(/^\/+/, '/');
+        }
+        return img;
+      });
+    }
+    
     return catalog;
   }
 
@@ -89,7 +100,10 @@ export class CatalogService {
   ): Promise<Catalog> {
     const catalog = await this.prisma.catalog.findFirst({
       where: { productSlug, categorySlug },
-      include: { sizes: true },
+      include: { 
+        sizes: true,
+        productImages: true
+      },
     });
 
     if (!catalog) {
@@ -101,7 +115,12 @@ export class CatalogService {
 
 
   async findAll(): Promise<Catalog[]> {
-    const catalogs = await this.prisma.catalog.findMany({ include: { sizes: true } });
+    const catalogs = await this.prisma.catalog.findMany({ 
+      include: { 
+        sizes: true,
+        productImages: true
+      }
+    });
     
     // Periksa dan perbaiki slug yang tidak konsisten untuk semua produk
     for (const catalog of catalogs) {
@@ -115,7 +134,10 @@ export class CatalogService {
   async findOne(id: number): Promise<Catalog> {
     const catalog = await this.prisma.catalog.findUnique({
       where: { id },
-      include: { sizes: true },
+      include: { 
+        sizes: true,
+        productImages: true
+      },
     });
 
     if (!catalog) {
@@ -162,7 +184,7 @@ export class CatalogService {
 
 
   async createCatalog(createCatalogDto: CreateCatalogDto): Promise<Catalog> {
-    const { name, category, sizes } = createCatalogDto;
+    const { name, category, sizes, images, mainImageIndex = 0 } = createCatalogDto;
 
     if (!sizes || !Array.isArray(sizes) || sizes.length === 0) {
       throw new HttpException(
@@ -203,34 +225,41 @@ export class CatalogService {
     }
 
     try {
+      // Create product with main image as the image field for backward compatibility
+      const mainImage = images && images.length > 0 
+        ? images[Math.min(mainImageIndex, images.length - 1)] 
+        : null;
+        
       const result = await this.prisma.catalog.create({
         data: {
           name,
           category,
-          isEnabled: createCatalogDto.isEnabled,
-          image: createCatalogDto.image,
-          slug: productSlug,
           productSlug,
           categorySlug,
-          sizes: { create: formattedSizes },
           description: createCatalogDto.description,
+          isEnabled: createCatalogDto.isEnabled,
+          image: mainImage,
+          sizes: {
+            create: formattedSizes,
+          },
+          // Create multiple images if provided
+          productImages: images && images.length > 0 ? {
+            create: images.map((imageUrl, index) => ({
+              imageUrl,
+              isMain: index === mainImageIndex
+            }))
+          } : undefined
         },
-        include: { sizes: true },
+        include: {
+          sizes: true,
+          productImages: true
+        },
       });
 
       return this.fixImageUrl(result);
     } catch (error) {
-      if (error instanceof Prisma.PrismaClientKnownRequestError) {
-        if (error.code === 'P2002') {
-          throw new HttpException(
-            `Duplicate entry for ${error.meta?.target}`,
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-      }
-
       throw new HttpException(
-        'Failed to create catalog',
+        `Failed to create product: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
@@ -243,7 +272,10 @@ export class CatalogService {
   ): Promise<Catalog> {
     const existingCatalog = await this.prisma.catalog.findUnique({
       where: { id },
-      include: { sizes: true },
+      include: { 
+        sizes: true,
+        productImages: true
+      },
     });
 
     if (!existingCatalog) {
@@ -349,13 +381,107 @@ export class CatalogService {
       await this.handleSizesUpdate(id, updateCatalogDto.sizes);
     }
 
-    const updated = await this.prisma.catalog.update({
-      where: { id },
-      data: updateData,
-      include: { sizes: true },
-    });
-    
-    return this.fixImageUrl(updated);
+    try {
+      // Handle ProductImage updates
+      if (updateCatalogDto.images && updateCatalogDto.images.length > 0) {
+        // Add new images
+        await Promise.all(
+          updateCatalogDto.images.map(async (imageUrl, index) => {
+            const isMain = index === (updateCatalogDto.mainImageIndex || 0);
+            
+            await this.prisma.productImage.create({
+              data: {
+                catalogId: id,
+                imageUrl,
+                isMain
+              }
+            });
+            
+            // If this is the main image, update the catalog's main image too
+            if (isMain) {
+              updateData.image = imageUrl;
+            }
+          })
+        );
+      }
+      
+      // Handle image deletion if specified
+      if (updateCatalogDto.imagesToDelete && updateCatalogDto.imagesToDelete.length > 0) {
+        await this.prisma.productImage.deleteMany({
+          where: {
+            id: {
+              in: updateCatalogDto.imagesToDelete
+            },
+            catalogId: id
+          }
+        });
+        
+        // If we deleted the main image, set a new one
+        const deletedMainImage = existingCatalog.productImages?.some(
+          img => img.isMain && updateCatalogDto.imagesToDelete?.includes(img.id)
+        );
+        
+        if (deletedMainImage) {
+          // Get remaining images
+          const remainingImages = await this.prisma.productImage.findMany({
+            where: { catalogId: id }
+          });
+          
+          if (remainingImages.length > 0) {
+            // Set first remaining image as main
+            await this.prisma.productImage.update({
+              where: { id: remainingImages[0].id },
+              data: { isMain: true }
+            });
+            
+            // Update catalog main image
+            updateData.image = remainingImages[0].imageUrl;
+          }
+        }
+      }
+      
+      // If mainImageIndex changed but no new images, update the isMain flag
+      if (
+        updateCatalogDto.mainImageIndex !== undefined && 
+        (!updateCatalogDto.images || updateCatalogDto.images.length === 0)
+      ) {
+        const images = await this.prisma.productImage.findMany({
+          where: { catalogId: id }
+        });
+        
+        if (images.length > 0) {
+          const newMainIndex = Math.min(updateCatalogDto.mainImageIndex, images.length - 1);
+          
+          // Reset all to not main
+          await this.prisma.productImage.updateMany({
+            where: { catalogId: id },
+            data: { isMain: false }
+          });
+          
+          // Set the new main image
+          await this.prisma.productImage.update({
+            where: { id: images[newMainIndex].id },
+            data: { isMain: true }
+          });
+          
+          // Update catalog main image
+          updateData.image = images[newMainIndex].imageUrl;
+        }
+      }
+
+      const updated = await this.prisma.catalog.update({
+        where: { id },
+        data: updateData,
+        include: { sizes: true },
+      });
+      
+      return this.fixImageUrl(updated);
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to update product',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
 
@@ -583,80 +709,104 @@ export class CatalogService {
     page: number = 1,
     limit: number = 10,
   ) {
+    const endOfEndDate = new Date(endDate);
+    endOfEndDate.setHours(23, 59, 59, 999);
+
+    if (isNaN(startDate.getTime()) || isNaN(endDate.getTime())) {
+      throw new HttpException(
+        'Invalid date format. Please use YYYY-MM-DD',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
     try {
       const skip = (page - 1) * limit;
 
-      const [products, totalCount] = await Promise.all([
+      const [items, total] = await Promise.all([
         this.prisma.catalog.findMany({
           where: {
-            id: {
-              gte: 1, 
+            createdAt: {
+              gte: startDate,
+              lte: endOfEndDate,
             },
           },
-          include: {
+          include: { 
             sizes: true,
+            productImages: true
           },
           skip,
-          take: limit,
-          orderBy: {
-            id: 'desc', 
-          },
+          take: Number(limit),
         }),
         this.prisma.catalog.count({
           where: {
-            id: {
-              gte: 1, 
+            createdAt: {
+              gte: startDate,
+              lte: endOfEndDate,
             },
           },
         }),
       ]);
 
-      const totalPages = Math.ceil(totalCount / limit);
-
       return {
-        products,
-        totalCount,
-        totalPages,
+        data: this.fixImageUrls(items),
+        meta: {
+          total,
+          page: Number(page),
+          limit: Number(limit),
+          totalPages: Math.ceil(total / Number(limit)),
+        },
       };
     } catch (error) {
       throw new HttpException(
-        'Failed to find products by date range',
+        `Failed to find products by date range: ${error.message}`,
         HttpStatus.INTERNAL_SERVER_ERROR,
       );
     }
   }
 
   async searchCatalogs(query: string): Promise<Catalog[]> {
-    if (!query) {
-      return this.findAll();
-    }
+    const normalizedQuery = query.toLowerCase();
 
-    const searchQuery = query.toLowerCase();
-
-    const allCatalogs = await this.prisma.catalog.findMany({
-      include: { sizes: true },
+    const results = await this.prisma.catalog.findMany({
+      where: {
+        OR: [
+          {
+            name: {
+              contains: normalizedQuery,
+              mode: 'insensitive',
+            },
+          },
+          {
+            category: {
+              contains: normalizedQuery,
+              mode: 'insensitive',
+            },
+          },
+          {
+            description: {
+              contains: normalizedQuery,
+              mode: 'insensitive',
+            },
+          },
+        ],
+      },
+      include: { 
+        sizes: true,
+        productImages: true
+      },
     });
 
-    const filteredCatalogs = allCatalogs.filter((catalog) => {
-      const nameMatch = catalog.name.toLowerCase().includes(searchQuery);
-      const categorySlugMatch = catalog.categorySlug
-        .toLowerCase()
-        .includes(searchQuery);
-      const productSlugMatch = catalog.productSlug
-        .toLowerCase()
-        .includes(searchQuery);
-
-      return nameMatch || categorySlugMatch || productSlugMatch;
-    });
-
-    return this.fixImageUrls(filteredCatalogs);
+    return this.fixImageUrls(results);
   }
 
  
   async findByCategory(categorySlug: string): Promise<Catalog[]> {
     const catalogs = await this.prisma.catalog.findMany({
       where: { categorySlug },
-      include: { sizes: true },
+      include: { 
+        sizes: true,
+        productImages: true
+      },
     });
 
     // Periksa dan perbaiki slug yang tidak konsisten
