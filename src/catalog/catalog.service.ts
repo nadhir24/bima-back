@@ -40,6 +40,48 @@ export class CatalogService {
     return { productSlug, categorySlug };
   }
 
+  /**
+   * Generate a unique slug by checking the database and appending a number if needed
+   * This is used to prevent duplicates when creating products
+   */
+  async generateUniqueSlug(
+    name: string,
+    category: string,
+  ): Promise<{ productSlug: string; categorySlug: string }> {
+    // First try the basic slug
+    let { productSlug, categorySlug } = this.createSlug(name, category);
+    
+    // Check if the slug already exists
+    let existingCatalog = await this.prisma.catalog.findFirst({
+      where: { productSlug, categorySlug },
+    });
+    
+    // If slug exists, add a number to make it unique
+    if (existingCatalog) {
+      let counter = 1;
+      let isUnique = false;
+      
+      while (!isUnique && counter < 100) {
+        const newProductSlug = `${productSlug}-${counter}`;
+        
+        existingCatalog = await this.prisma.catalog.findFirst({
+          where: { 
+            productSlug: newProductSlug, 
+            categorySlug 
+          },
+        });
+        
+        if (!existingCatalog) {
+          productSlug = newProductSlug;
+          isUnique = true;
+        } else {
+          counter++;
+        }
+      }
+    }
+    
+    return { productSlug, categorySlug };
+  }
 
   async findBySlug(
     categorySlug: string,
@@ -60,6 +102,12 @@ export class CatalogService {
 
   async findAll(): Promise<Catalog[]> {
     const catalogs = await this.prisma.catalog.findMany({ include: { sizes: true } });
+    
+    // Periksa dan perbaiki slug yang tidak konsisten untuk semua produk
+    for (const catalog of catalogs) {
+      await this.ensureSlugConsistency(catalog);
+    }
+    
     return this.fixImageUrls(catalogs);
   }
 
@@ -74,7 +122,42 @@ export class CatalogService {
       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
 
+    // Periksa dan perbaiki slug yang tidak konsisten
+    await this.ensureSlugConsistency(catalog);
+
     return this.fixImageUrl(catalog);
+  }
+
+  /**
+   * Memastikan slug konsisten dengan nama produk dan kategori
+   * @param catalog Produk yang akan diperiksa slugnya
+   */
+  private async ensureSlugConsistency(catalog: Catalog): Promise<void> {
+    const { productSlug, categorySlug } = this.createSlug(
+      catalog.name,
+      catalog.category,
+    );
+
+    // Jika slug saat ini tidak konsisten dengan nama dan kategori
+    if (catalog.productSlug !== productSlug || catalog.categorySlug !== categorySlug) {
+      try {
+        // Perbarui slug di database
+        await this.prisma.catalog.update({
+          where: { id: catalog.id },
+          data: {
+            productSlug,
+            categorySlug,
+          },
+        });
+        
+        // Update the object itself to reflect the new slugs
+        catalog.productSlug = productSlug;
+        catalog.categorySlug = categorySlug;
+      } catch (error) {
+        // Jika gagal update (misalnya karena konflik), biarkan slug yang lama
+        console.error(`Failed to update inconsistent slugs for catalog ID ${catalog.id}:`, error);
+      }
+    }
   }
 
 
@@ -88,28 +171,8 @@ export class CatalogService {
       );
     }
 
-    const { productSlug, categorySlug } = this.createSlug(name, category);
-
-    try {
-      const existingCatalog = await this.prisma.catalog.findFirst({
-        where: { productSlug, categorySlug },
-      });
-
-      if (existingCatalog) {
-        throw new HttpException(
-          'A catalog with this slug already exists',
-          HttpStatus.BAD_REQUEST,
-        );
-      }
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      throw new HttpException(
-        'Failed to check for existing catalogs',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
+    // Use generateUniqueSlug instead of createSlug to avoid duplicates
+    const { productSlug, categorySlug } = await this.generateUniqueSlug(name, category);
 
     let formattedSizes;
     try {
@@ -167,7 +230,6 @@ export class CatalogService {
     id: number,
     updateCatalogDto: UpdateCatalogDto,
   ): Promise<Catalog> {
-    // Check if catalog exists
     const existingCatalog = await this.prisma.catalog.findUnique({
       where: { id },
       include: { sizes: true },
@@ -176,28 +238,16 @@ export class CatalogService {
     if (!existingCatalog) {
       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
-    
+
     const updateData: Prisma.CatalogUpdateInput = {};
-
-    if (updateCatalogDto.name !== undefined) {
-      updateData.name = updateCatalogDto.name;
-    }
-
-    if (updateCatalogDto.category !== undefined) {
+    if (updateCatalogDto.name) updateData.name = updateCatalogDto.name;
+    if (updateCatalogDto.category)
       updateData.category = updateCatalogDto.category;
-    }
-
-    if (updateCatalogDto.description !== undefined) {
-      updateData.description = updateCatalogDto.description;
-    }
-
-    if (updateCatalogDto.image !== undefined) {
-      updateData.image = updateCatalogDto.image;
-    }
-
-    if (updateCatalogDto.isEnabled !== undefined) {
+    if (updateCatalogDto.isEnabled !== undefined)
       updateData.isEnabled = updateCatalogDto.isEnabled;
-    }
+    if (updateCatalogDto.image) updateData.image = updateCatalogDto.image;
+    if (updateCatalogDto.description)
+      updateData.description = updateCatalogDto.description;
 
     if (updateCatalogDto.name && updateCatalogDto.category) {
       const { productSlug, categorySlug } = this.createSlug(
@@ -214,14 +264,18 @@ export class CatalogService {
       });
 
       if (slugExists) {
-        throw new HttpException(
-          'A catalog with this slug already exists',
-          HttpStatus.BAD_REQUEST,
+        // Generate unique slugs instead of failing
+        const uniqueSlugs = await this.generateUniqueSlug(
+          updateCatalogDto.name,
+          updateCatalogDto.category,
         );
+        
+        updateData.productSlug = uniqueSlugs.productSlug;
+        updateData.categorySlug = uniqueSlugs.categorySlug;
+      } else {
+        updateData.productSlug = productSlug;
+        updateData.categorySlug = categorySlug;
       }
-
-      updateData.productSlug = productSlug;
-      updateData.categorySlug = categorySlug;
     } else if (updateCatalogDto.name) {
       // If only name changed, but not category
       const { productSlug, categorySlug } = this.createSlug(
@@ -229,8 +283,27 @@ export class CatalogService {
         existingCatalog.category,
       );
       
-      updateData.productSlug = productSlug;
-      updateData.categorySlug = categorySlug;
+      const slugExists = await this.prisma.catalog.findFirst({
+        where: {
+          productSlug,
+          categorySlug,
+          id: { not: id },
+        },
+      });
+      
+      if (slugExists) {
+        // Generate unique slugs instead of failing
+        const uniqueSlugs = await this.generateUniqueSlug(
+          updateCatalogDto.name,
+          existingCatalog.category,
+        );
+        
+        updateData.productSlug = uniqueSlugs.productSlug;
+        updateData.categorySlug = uniqueSlugs.categorySlug;
+      } else {
+        updateData.productSlug = productSlug;
+        updateData.categorySlug = categorySlug;
+      }
     } else if (updateCatalogDto.category) {
       // If only category changed, but not name
       const { productSlug, categorySlug } = this.createSlug(
@@ -238,17 +311,31 @@ export class CatalogService {
         updateCatalogDto.category,
       );
       
-      updateData.productSlug = productSlug;
-      updateData.categorySlug = categorySlug;
+      const slugExists = await this.prisma.catalog.findFirst({
+        where: {
+          productSlug,
+          categorySlug,
+          id: { not: id },
+        },
+      });
+      
+      if (slugExists) {
+        // Generate unique slugs instead of failing
+        const uniqueSlugs = await this.generateUniqueSlug(
+          existingCatalog.name,
+          updateCatalogDto.category,
+        );
+        
+        updateData.productSlug = uniqueSlugs.productSlug;
+        updateData.categorySlug = uniqueSlugs.categorySlug;
+      } else {
+        updateData.productSlug = productSlug;
+        updateData.categorySlug = categorySlug;
+      }
     }
 
     if (updateCatalogDto.sizes?.length > 0) {
       await this.handleSizesUpdate(id, updateCatalogDto.sizes);
-    }
-    
-    // Handle size deletion if sizesToDelete array is provided
-    if (updateCatalogDto.sizesToDelete && updateCatalogDto.sizesToDelete.length > 0) {
-      await this.deleteSizes(id, updateCatalogDto.sizesToDelete);
     }
 
     const updated = await this.prisma.catalog.update({
@@ -258,58 +345,6 @@ export class CatalogService {
     });
     
     return this.fixImageUrl(updated);
-  }
-
-  /**
-   * Delete sizes by their IDs
-   * @param catalogId The catalog ID to verify that the sizes belong to this catalog
-   * @param sizeIds Array of size IDs to delete
-   */
-  private async deleteSizes(catalogId: number, sizeIds: number[]) {
-    try {
-      // Verify that all sizes belong to this catalog
-      const existingSizes = await this.prisma.size.findMany({
-        where: {
-          id: { in: sizeIds },
-          catalogId: catalogId,
-        },
-      });
-      
-      if (existingSizes.length !== sizeIds.length) {
-        // Some size IDs don't belong to this catalog
-        const existingIds = existingSizes.map(size => size.id);
-        const invalidIds = sizeIds.filter(id => !existingIds.includes(id));
-        
-        if (invalidIds.length > 0) {
-          throw new HttpException(
-            `Some size IDs (${invalidIds.join(', ')}) do not belong to catalog ID ${catalogId}`,
-            HttpStatus.BAD_REQUEST,
-          );
-        }
-      }
-      
-      // Delete the sizes
-      await this.prisma.size.deleteMany({
-        where: {
-          id: { in: sizeIds },
-          catalogId: catalogId,
-        },
-      });
-      
-      return { 
-        deletedCount: existingSizes.length,
-        message: `Successfully deleted ${existingSizes.length} sizes` 
-      };
-    } catch (error) {
-      if (error instanceof HttpException) {
-        throw error;
-      }
-      
-      throw new HttpException(
-        error.message || 'Failed to delete sizes',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
   }
 
 
@@ -581,6 +616,11 @@ export class CatalogService {
       where: { categorySlug },
       include: { sizes: true },
     });
+
+    // Periksa dan perbaiki slug yang tidak konsisten
+    for (const catalog of catalogs) {
+      await this.ensureSlugConsistency(catalog);
+    }
 
     return this.fixImageUrls(catalogs);
   }
