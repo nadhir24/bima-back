@@ -98,7 +98,18 @@ export class CatalogController {
     files?: Express.Multer.File[],
   ) {
     try {
+      // Debug logging
+      console.log('=== DEBUG: Create Catalog Request ===');
+      console.log('Form data received:', formData);
+      console.log('Files received:', files?.map(f => ({ 
+        originalname: f.originalname,
+        mimetype: f.mimetype,
+        size: f.size,
+        fieldname: f.fieldname 
+      })));
+      
       const transformedData = transformFormDataToDTO(formData);
+      console.log('Transformed data:', transformedData);
 
       const validationPipe = new ValidationPipe({
         transform: true,
@@ -113,8 +124,11 @@ export class CatalogController {
         transformedData,
         { metatype: CreateCatalogDto, type: 'body' },
       )) as CreateCatalogDto;
+      
+      console.log('DTO after validation:', createCatalogDto);
 
       if (files && files.length > 0) {
+        console.log(`Processing ${files.length} uploaded files`);
         createCatalogDto.images = files.map(file => 
           normalizeImagePath(`/uploads/catalog_images/${file.filename}`)
         );
@@ -122,15 +136,22 @@ export class CatalogController {
         // Also set the primary image for backward compatibility
         if (createCatalogDto.images.length > 0) {
           const mainIndex = createCatalogDto.mainImageIndex || 0;
+          console.log(`Setting main image index: ${mainIndex}`);
           createCatalogDto.image = createCatalogDto.images[
             Math.min(mainIndex, createCatalogDto.images.length - 1)
           ];
+          console.log(`Main image set to: ${createCatalogDto.image}`);
         }
       }
 
       const result = await this.catalogService.createCatalog(createCatalogDto);
       return result;
     } catch (error) {
+      console.error('Error in catalog creation:', error);
+      if (error instanceof Error) {
+        console.error('Error details:', error.message);
+        console.error('Error stack:', error.stack);
+      }
       throw error;
     }
   }
