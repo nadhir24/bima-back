@@ -371,10 +371,41 @@ export class CatalogService {
     try {
       await Promise.all(
         sizes.map(async (size) => {
+          // Jika ukuran tidak memiliki ID, buat ukuran baru
           if (!size.id) {
-            return;
+            // Validasi data sebelum membuat ukuran baru
+            if (!size.size) {
+              throw new HttpException(
+                'Size name is required for new sizes',
+                HttpStatus.BAD_REQUEST,
+              );
+            }
+            
+            if (size.price === undefined) {
+              throw new HttpException(
+                'Price is required for new sizes',
+                HttpStatus.BAD_REQUEST,
+              );
+            }
+            
+            const qtyNumeric = 
+              typeof size.qty === 'string' ? parseInt(size.qty, 10) : 
+              typeof size.qty === 'number' ? size.qty : 0;
+              
+            // Buat ukuran baru
+            await this.prisma.size.create({
+              data: {
+                size: size.size,
+                price: this.formatPrice(size.price),
+                qty: qtyNumeric,
+                catalogId: catalogId,
+              },
+            });
+            
+            return; // Lanjut ke ukuran berikutnya
           }
 
+          // Kode untuk update ukuran yang sudah ada
           const sizeId =
             typeof size.id === 'string' ? parseInt(size.id, 10) : size.id;
 
