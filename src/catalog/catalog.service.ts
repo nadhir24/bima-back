@@ -5,6 +5,18 @@ import { CreateCatalogDto } from './dto/create-catalog.dto';
 import slugify from 'slugify';
 import { UpdateCatalogDto } from './dto/update-catalog.dto';
 
+/**
+ * TODO: Fix TypeScript errors related to Prisma schema and ProductImage model
+ * There are several TypeScript errors in this file related to:
+ * 1. 'productImages' not being recognized in 'CatalogInclude'
+ * 2. 'productImage' method not being found on PrismaService 
+ * 3. 'productImages' property not existing on Catalog model
+ * 
+ * These issues will need to be resolved by:
+ * 1. Manually extending the Prisma types
+ * 2. Regenerating the Prisma client with the correct schema
+ * 3. Using type assertions where necessary
+ */
 @Injectable()
 export class CatalogService {
   constructor(private prisma: PrismaService) {}
@@ -728,7 +740,7 @@ export class CatalogService {
           where: {
             OR: [
               { 
-                updatedAt: {
+                createdAt: {
                   gte: startDate,
                   lte: endOfEndDate,
                 }
@@ -746,7 +758,7 @@ export class CatalogService {
           where: {
             OR: [
               { 
-                updatedAt: {
+                createdAt: {
                   gte: startDate,
                   lte: endOfEndDate,
                 }
