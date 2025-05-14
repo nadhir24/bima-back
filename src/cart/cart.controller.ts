@@ -21,7 +21,6 @@ import { AuthGuard } from '@nestjs/passport';
 import { Request, Response } from 'express';
 import { CreateCartDto } from './dto/create-cart.dto';
 import { UpdateCartDto } from './dto/update-cart.dto';
-import { Prisma } from '@prisma/client';
 
 @Controller('cart')
 export class CartController {
@@ -54,42 +53,10 @@ export class CartController {
     return this.cartService.FindAllCart();
   }
 
-  @Get('count')
-  async getCartItemCount(
-    @Query('userId') userIdQuery?: string,
-    @Query('guestId') guestIdQuery?: string,
-    @Query('force') forceRefresh?: string,
-    @Req() req?: Request,
-  ) {
-    let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
-    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
-
-    if (!userId && !guestId) {
-      return { count: 0 };
-    }
-
-    // Filter by time for guest users to prevent old carts
-    const oneDayAgo = new Date();
-    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-
-    const whereCondition: Prisma.CartWhereInput = userId
-      ? { userId }
-      : { 
-          guestId,
-          createdAt: {
-            gte: oneDayAgo
-          }
-        };
-
-    const count = await this.cartService.getCartItemCount(userId, guestId, whereCondition);
-    return { count };
-  }
-
   @Get('total')
   async getCartTotalFormatted(
     @Query('userId') userIdQuery?: string,
     @Query('guestId') guestIdQuery?: string,
-    @Query('force') forceRefresh?: string,
     @Req() req?: Request,
   ) {
     let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
@@ -99,20 +66,7 @@ export class CartController {
       return 'Rp0';
     }
 
-    // Filter by time for guest users
-    const oneDayAgo = new Date();
-    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-
-    const whereCondition: Prisma.CartWhereInput = userId
-      ? { userId }
-      : { 
-          guestId,
-          createdAt: {
-            gte: oneDayAgo
-          }
-        };
-
-    const totalNumber = await this.cartService.getCartTotal(userId, guestId, whereCondition);
+    const totalNumber = await this.cartService.getCartTotal(userId, guestId);
 
     const formattedTotal = `Rp${totalNumber.toLocaleString('id-ID')}`;
 
@@ -327,11 +281,27 @@ export class CartController {
     }
   }
 
+  @Get('count')
+  async getCartItemCount(
+    @Query('userId') userIdQuery?: string,
+    @Query('guestId') guestIdQuery?: string,
+    @Req() req?: Request,
+  ) {
+    let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
+    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
+
+    if (!userId && !guestId) {
+      return { count: 0 };
+    }
+
+    const count = await this.cartService.getCartItemCount(userId, guestId);
+    return { count };
+  }
+
   @Get('findMany')
   async findManyCartsEndpoint(
     @Query('userId') userIdQuery?: string,
     @Query('guestId') guestIdQuery?: string,
-    @Query('force') forceRefresh?: string,
     @Req() req?: Request,
   ) {
     let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
@@ -341,37 +311,13 @@ export class CartController {
       return [];
     }
 
-    // Penting: tambahkan timestamp untuk memastikan hanya cart baru yang ditampilkan
-    // Untuk guest, hanya tampilkan cart yang dibuat dalam 24 jam terakhir
-    const oneDayAgo = new Date();
-    oneDayAgo.setDate(oneDayAgo.getDate() - 1);
-
-    const whereClause: Prisma.CartWhereInput = userId 
-      ? { 
-          userId: userId 
-        } 
-      : { 
-          guestId: guestId,
-          // Untuk guest, tambahkan filter waktu
-          createdAt: {
-            gte: oneDayAgo
-          }
-        };
-
-    // Jika force refresh, pastikan no-cache header dikirim
-    if (forceRefresh === 'true') {
-      if (req && req.res) {
-        req.res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate');
-        req.res.setHeader('Pragma', 'no-cache');
-      }
-    }
+    const whereClause = userId ? { userId: userId } : { guestId: guestId };
 
     const carts = await this.cartService.findManyCarts({
       where: whereClause,
       include: { user: true, catalog: true, size: true },
-      orderBy: { createdAt: 'desc' }, // Tampilkan yang terbaru dulu
+      orderBy: { createdAt: 'asc' },
     });
-
     return carts.map((cart) => this.formatCartResponse(cart));
   }
 
