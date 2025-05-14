@@ -280,15 +280,21 @@ export class CartService {
   async getCartItemCount(
     userId: number | null,
     guestId: string | null,
+    whereCondition?: Prisma.CartWhereInput
   ): Promise<number> {
     try {
+      const where = whereCondition || {
+        OR: [
+          { userId: userId }, 
+          { guestId: guestId || undefined }
+        ],
+      };
+
       const aggregateResult = await this.prisma.cart.aggregate({
         _sum: {
           quantity: true,
         },
-        where: {
-          OR: [{ userId: userId }, { guestId: guestId || undefined }],
-        },
+        where: where,
       });
       return aggregateResult._sum.quantity ?? 0;
     } catch (error) {
@@ -299,12 +305,18 @@ export class CartService {
   async getCartTotal(
     userId: number | null,
     guestId: string | null,
+    whereCondition?: Prisma.CartWhereInput
   ): Promise<number> {
     try {
+      const where = whereCondition || {
+        OR: [
+          { userId: userId }, 
+          { guestId: guestId || undefined }
+        ],
+      };
+
       const cartItems = await this.findManyCarts({
-        where: {
-          OR: [{ userId: userId }, { guestId: guestId || undefined }],
-        },
+        where: where,
         include: { size: true },
       });
 
