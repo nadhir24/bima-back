@@ -312,4 +312,24 @@ export class CartController {
       };
     }
   }
+
+  @Delete('admin/cleanup-expired-sessions')
+  async cleanupExpiredSessions(@Query('days') days?: string) {
+    try {
+      const daysToKeep = days ? parseInt(days, 10) : 30;
+      const count = await this.cartService.cleanupExpiredGuestSessions(daysToKeep);
+      
+      return {
+        success: true,
+        message: `Successfully removed ${count} expired guest cart items`,
+        count: count,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Failed to clean up expired guest sessions',
+        statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
 }

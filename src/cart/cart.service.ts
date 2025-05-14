@@ -362,4 +362,26 @@ export class CartService {
       );
     }
   }
+
+  async cleanupExpiredGuestSessions(olderThanDays: number = 30): Promise<number> {
+    try {
+      const date = new Date();
+      date.setDate(date.getDate() - olderThanDays);
+      
+      const result = await this.prisma.cart.deleteMany({
+        where: {
+          userId: null,
+          guestId: { not: null },
+          createdAt: { lt: date }
+        }
+      });
+      
+      return result.count;
+    } catch (error) {
+      throw new HttpException(
+        error.message || 'Failed to clean up expired guest sessions',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
+  }
 }
