@@ -182,6 +182,17 @@ export class CatalogService {
           price: this.formatPrice(size.price),
           qty: size.qty || 0,
         };
+        
+        // If the size is in "value unit" format, clean it for custom unit
+        if (typeof formatted.size === 'string' && formatted.size.includes('custom')) {
+          // Extract only the size value for custom unit
+          const parts = formatted.size.split(' ');
+          if (parts.length > 1 && parts[parts.length - 1].toLowerCase() === 'custom') {
+            // Keep only the size value without 'custom'
+            formatted.size = parts.slice(0, -1).join(' ');
+          }
+        }
+        
         return formatted;
       });
     } catch (error) {
