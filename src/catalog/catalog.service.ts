@@ -167,6 +167,7 @@ export class CatalogService {
     id: number,
     updateCatalogDto: UpdateCatalogDto,
   ): Promise<Catalog> {
+    // Check if catalog exists
     const existingCatalog = await this.prisma.catalog.findUnique({
       where: { id },
       include: { sizes: true },
@@ -175,25 +176,41 @@ export class CatalogService {
     if (!existingCatalog) {
       throw new HttpException('Catalog not found', HttpStatus.NOT_FOUND);
     }
-
+    
     const updateData: Prisma.CatalogUpdateInput = {};
-    if (updateCatalogDto.name) updateData.name = updateCatalogDto.name;
-    if (updateCatalogDto.category)
-      updateData.category = updateCatalogDto.category;
-    if (updateCatalogDto.isEnabled !== undefined)
-      updateData.isEnabled = updateCatalogDto.isEnabled;
-    if (updateCatalogDto.image) updateData.image = updateCatalogDto.image;
-    if (updateCatalogDto.description)
-      updateData.description = updateCatalogDto.description;
 
-    if (updateCatalogDto.name || updateCatalogDto.category) {
+    if (updateCatalogDto.name !== undefined) {
+      updateData.name = updateCatalogDto.name;
+    }
+
+    if (updateCatalogDto.category !== undefined) {
+      updateData.category = updateCatalogDto.category;
+    }
+
+    if (updateCatalogDto.description !== undefined) {
+      updateData.description = updateCatalogDto.description;
+    }
+
+    if (updateCatalogDto.image !== undefined) {
+      updateData.image = updateCatalogDto.image;
+    }
+
+    if (updateCatalogDto.isEnabled !== undefined) {
+      updateData.isEnabled = updateCatalogDto.isEnabled;
+    }
+
+    if (updateCatalogDto.name && updateCatalogDto.category) {
       const { productSlug, categorySlug } = this.createSlug(
-        updateCatalogDto.name ?? existingCatalog.name,
-        updateCatalogDto.category ?? existingCatalog.category,
+        updateCatalogDto.name,
+        updateCatalogDto.category,
       );
 
       const slugExists = await this.prisma.catalog.findFirst({
-        where: { productSlug, categorySlug, id: { not: id } },
+        where: {
+          productSlug,
+          categorySlug,
+          id: { not: id },
+        },
       });
 
       if (slugExists) {
@@ -205,10 +222,33 @@ export class CatalogService {
 
       updateData.productSlug = productSlug;
       updateData.categorySlug = categorySlug;
+    } else if (updateCatalogDto.name) {
+      // If only name changed, but not category
+      const { productSlug, categorySlug } = this.createSlug(
+        updateCatalogDto.name,
+        existingCatalog.category,
+      );
+      
+      updateData.productSlug = productSlug;
+      updateData.categorySlug = categorySlug;
+    } else if (updateCatalogDto.category) {
+      // If only category changed, but not name
+      const { productSlug, categorySlug } = this.createSlug(
+        existingCatalog.name,
+        updateCatalogDto.category,
+      );
+      
+      updateData.productSlug = productSlug;
+      updateData.categorySlug = categorySlug;
     }
 
     if (updateCatalogDto.sizes?.length > 0) {
       await this.handleSizesUpdate(id, updateCatalogDto.sizes);
+    }
+    
+    // Handle size deletion if sizesToDelete array is provided
+    if (updateCatalogDto.sizesToDelete && updateCatalogDto.sizesToDelete.length > 0) {
+      await this.deleteSizes(id, updateCatalogDto.sizesToDelete);
     }
 
     const updated = await this.prisma.catalog.update({
@@ -218,6 +258,58 @@ export class CatalogService {
     });
     
     return this.fixImageUrl(updated);
+  }
+
+  /**
+   * Delete sizes by their IDs
+   * @param catalogId The catalog ID to verify that the sizes belong to this catalog
+   * @param sizeIds Array of size IDs to delete
+   */
+  private async deleteSizes(catalogId: number, sizeIds: number[]) {
+    try {
+      // Verify that all sizes belong to this catalog
+      const existingSizes = await this.prisma.size.findMany({
+        where: {
+          id: { in: sizeIds },
+          catalogId: catalogId,
+        },
+      });
+      
+      if (existingSizes.length !== sizeIds.length) {
+        // Some size IDs don't belong to this catalog
+        const existingIds = existingSizes.map(size => size.id);
+        const invalidIds = sizeIds.filter(id => !existingIds.includes(id));
+        
+        if (invalidIds.length > 0) {
+          throw new HttpException(
+            `Some size IDs (${invalidIds.join(', ')}) do not belong to catalog ID ${catalogId}`,
+            HttpStatus.BAD_REQUEST,
+          );
+        }
+      }
+      
+      // Delete the sizes
+      await this.prisma.size.deleteMany({
+        where: {
+          id: { in: sizeIds },
+          catalogId: catalogId,
+        },
+      });
+      
+      return { 
+        deletedCount: existingSizes.length,
+        message: `Successfully deleted ${existingSizes.length} sizes` 
+      };
+    } catch (error) {
+      if (error instanceof HttpException) {
+        throw error;
+      }
+      
+      throw new HttpException(
+        error.message || 'Failed to delete sizes',
+        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      );
+    }
   }
 
 

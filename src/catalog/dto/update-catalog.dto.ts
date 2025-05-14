@@ -50,5 +50,9 @@ export class UpdateCatalogDto {
     qty?: number;
   }[];
 
+  @IsArray()
+  @IsOptional()
+  sizesToDelete?: number[]; // Array of size IDs to delete
+
   blurDataURL?: string; // Add this line
 }
