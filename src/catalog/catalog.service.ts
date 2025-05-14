@@ -236,6 +236,7 @@ export class CatalogService {
           category,
           productSlug,
           categorySlug,
+          slug: `${categorySlug}-${productSlug}`,
           description: createCatalogDto.description,
           isEnabled: createCatalogDto.isEnabled,
           image: mainImage,
@@ -725,10 +726,14 @@ export class CatalogService {
       const [items, total] = await Promise.all([
         this.prisma.catalog.findMany({
           where: {
-            createdAt: {
-              gte: startDate,
-              lte: endOfEndDate,
-            },
+            OR: [
+              { 
+                updatedAt: {
+                  gte: startDate,
+                  lte: endOfEndDate,
+                }
+              },
+            ]
           },
           include: { 
             sizes: true,
@@ -739,10 +744,14 @@ export class CatalogService {
         }),
         this.prisma.catalog.count({
           where: {
-            createdAt: {
-              gte: startDate,
-              lte: endOfEndDate,
-            },
+            OR: [
+              { 
+                updatedAt: {
+                  gte: startDate,
+                  lte: endOfEndDate,
+                }
+              },
+            ]
           },
         }),
       ]);
