@@ -242,8 +242,17 @@ export class CartController {
   }
 
   @Get('guest-session')
-  getGuestSession(@Req() req: Request, @Res() res: Response) {
-    res.send({ guestId: req.sessionID });
+  async getGuestSession(@Req() req: Request, @Res() res: Response) {
+    const guestId = req.sessionID;
+    
+    // Delete any existing cart items for this new guest ID
+    // to ensure a fresh start with an empty cart
+    await this.cartService.removeManyCarts({
+      where: { guestId: guestId }
+    });
+    
+    // Return the guest ID
+    res.send({ guestId: guestId });
   }
 
   @Get('count')
