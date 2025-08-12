@@ -9,14 +9,24 @@ import {
   IsNotEmpty,
 } from 'class-validator';
 
+/**
+ * Sub-DTO untuk ukuran produk (sizes)
+ */
 class SizeDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Size value is required' })
   size: string;
 
-  @IsString()
-  @IsNotEmpty()
-  price: string;
+  @Transform(({ value }) => {
+    if (typeof value === 'string') {
+      const parsed = parseInt(value.replace(/\D/g, ''), 10); // Hapus karakter non-numeric
+      return isNaN(parsed) ? 0 : parsed;
+    }
+    return typeof value === 'number' ? value : 0;
+  })
+  @IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'Price must be a valid number' })
+  @IsNotEmpty({ message: 'Price is required' })
+  price: number;
 
   @Transform(({ value }) => {
     if (typeof value === 'string') {
@@ -25,47 +35,41 @@ class SizeDto {
     }
     return typeof value === 'number' ? value : 0;
   })
-  @IsNumber()
+  @IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'Quantity must be a valid number' })
   @IsOptional()
-  qty: number = 0; 
+  qty: number = 0; // Default to 0 if not provided
 }
 
+/**
+ * Main DTO untuk membuat katalog produk
+ */
 export class CreateCatalogDto {
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Product name is required' })
   name: string;
 
   @IsString()
-  @IsOptional()
-  blurDataURL?: string = ''; 
-
-  @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Category is required' })
   category: string;
 
   @IsString()
-  @IsNotEmpty()
+  @IsNotEmpty({ message: 'Description is required' })
   description: string;
 
   @Transform(({ value }) => {
     if (typeof value === 'string') {
-      return value === 'true';
+      return value === 'true'; // Convert string "true" to boolean
     }
-    return !!value;
+    return !!value; // Ensure it's always a boolean
   })
-  @IsBoolean()
-  isEnabled: boolean = true;  
+  @IsBoolean({ message: 'isEnabled must be a boolean' })
+  isEnabled: boolean = true;
 
-  @IsString()
-  @IsOptional()
-  image?: string;
-  
   @IsArray()
-  @IsOptional()
-  images?: string[] = [];
-  
-  @IsNumber()
-  @IsOptional()
+  @ValidateNested({ each: true, message: 'Sizes must be an array of valid size objects' })
+  @Type(() => SizeDto)
+  sizes: SizeDto[];
+
   @Transform(({ value }) => {
     if (typeof value === 'string') {
       const parsed = parseInt(value, 10);
@@ -73,18 +77,13 @@ export class CreateCatalogDto {
     }
     return typeof value === 'number' ? value : 0;
   })
-  mainImageIndex?: number = 0;
+  @IsNumber({ allowNaN: false, allowInfinity: false }, { message: 'Main image index must be a valid number' })
+  @IsOptional()
+  mainImageIndex?: number = 0; // Default to 0 if not provided
 
   @IsOptional()
-  @IsString()
-  categorySlug?: string;
+  images?: string[]; // Optional field for image URLs
 
   @IsOptional()
-  @IsString()
-  productSlug?: string;
-
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => SizeDto)
-  sizes: SizeDto[];
+  image?: string; // Optional field for the main image URL
 }

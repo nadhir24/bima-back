@@ -27,26 +27,25 @@ model User {
 }
 
 model Catalog {
-  id           Int           @id @default(autoincrement())
-  name         String
-  slug         String        @unique
-  category     String
-  categorySlug String
-  description  String
-  isEnabled    Boolean
-  image        String?
-  productSlug  String
-  carts        Cart[]        @relation("CatalogCarts")
-  sizes        Size[]        @relation("CatalogSizes")
-  productImages ProductImage[] @relation("CatalogImages")
+  id            Int             @id @default(autoincrement())
+  name          String
+  slug          String          @unique                     // slug utama produk
+  category      String
+  categorySlug  String
+  description   String
+  isEnabled     Boolean         @default(true)              // default aktif
+  image         String?                                       
+  productSlug   String                                       
+  carts         Cart[]          @relation("CatalogCarts")
+  sizes         Size[]          @relation("CatalogSizes")
+  productImages ProductImage[]  @relation("CatalogImages")
 
   @@map("catalogs")
 }
-
 model Size {
   id           Int           @id @default(autoincrement())
   size         String
-  price        String
+  price        String                                       // pakai Float untuk harga
   qty          Int           @default(0)
   catalogId    Int
   carts        Cart[]        @relation("SizeCarts")
@@ -256,6 +255,7 @@ model ProductImage {
   catalogId Int
   isMain    Boolean  @default(false)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
   catalog   Catalog  @relation("CatalogImages", fields: [catalogId], references: [id], onDelete: Cascade)
 
   @@map("product_images")

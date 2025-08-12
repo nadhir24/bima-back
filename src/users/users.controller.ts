@@ -10,7 +10,6 @@ import {
   UseInterceptors,
   UploadedFile,
   ParseFilePipe,
-  FileTypeValidator,
   MaxFileSizeValidator,
   HttpException,
   Delete,
@@ -98,7 +97,6 @@ export class UsersController {
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 2000000 }),
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
         ],
         fileIsRequired: false,
       }),

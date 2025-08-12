@@ -2,76 +2,80 @@ import {
   Controller,
   Get,
   Post,
-  Body,
   Patch,
-  Param,
   Delete,
+  Param,
+  Body,
   Query,
+  Res,
+  Inject,
+  forwardRef,
   HttpException,
   HttpStatus,
   UseInterceptors,
-  UploadedFile,
   UploadedFiles,
+  ValidationPipe,
   ParseFilePipe,
-  FileTypeValidator,
   MaxFileSizeValidator,
-  Inject,
-  forwardRef,
-  Res,
 } from '@nestjs/common';
-import { FileInterceptor, FilesInterceptor } from '@nestjs/platform-express';
+import { FilesInterceptor } from '@nestjs/platform-express';
 import { CatalogService } from './catalog.service';
-import { CreateCatalogDto } from './dto/create-catalog.dto';
-import { UpdateCatalogDto } from './dto/update-catalog.dto';
-import { ValidationPipe } from '@nestjs/common';
 import { CartService } from '../cart/cart.service';
 import { PrismaService } from 'prisma/prisma.service';
+import { CreateCatalogDto } from './dto/create-catalog.dto';
+import { UpdateCatalogDto } from './dto/update-catalog.dto';
 
-function transformFormDataToDTO(formData: any): any {
-  const transformedData = { ...formData };
-
-  if (typeof transformedData.sizes === 'string') {
-    try {
-      transformedData.sizes = JSON.parse(transformedData.sizes);
-    } catch (error) {
-      throw new HttpException(
-        'Invalid sizes format. Expected a valid JSON array.',
-        HttpStatus.BAD_REQUEST,
-      );
-    }
-  }
-  
-  if (typeof transformedData.mainImageIndex === 'string') {
-    transformedData.mainImageIndex = parseInt(transformedData.mainImageIndex, 10);
-    if (isNaN(transformedData.mainImageIndex)) {
-      transformedData.mainImageIndex = 0;
-    }
-  }
-  
-  if (typeof transformedData.imagesToDelete === 'string') {
-    try {
-      transformedData.imagesToDelete = JSON.parse(transformedData.imagesToDelete);
-    } catch (error) {
-      transformedData.imagesToDelete = [];
-    }
-  }
-
-  if (typeof transformedData.isEnabled === 'string') {
-    transformedData.isEnabled = transformedData.isEnabled === 'true';
-  }
-
-  if (!transformedData.blurDataURL) {
-    transformedData.blurDataURL = '';
-  }
-
-  return transformedData;
-}
-
-// Helper function to ensure correct image URL format
+/** Normalize image URL path */
 function normalizeImagePath(path: string): string {
-  // Ensure the path starts with a single slash
   return path.replace(/^\/*/, '/');
 }
+
+/** Transform multipart form-data into DTO format */
+function transformFormDataToDTO(formData: any): any {
+  const data = { ...formData };
+
+  // Parse sizes
+  if (typeof data.sizes === 'string') {
+    try {
+      data.sizes = JSON.parse(data.sizes);
+    } catch {
+      throw new HttpException('Invalid sizes format', HttpStatus.BAD_REQUEST);
+    }
+  }
+  if (Array.isArray(data.sizes)) {
+    data.sizes = data.sizes.map(size => ({
+      size: String(size.size || ''),
+      price: Number(String(size.price).replace(/[^0-9.]/g, '')) || 0, // pastikan number
+      qty: Number(size.qty) || 0,
+    }));
+  }
+
+  // Parse numeric and boolean fields
+  data.mainImageIndex = Number(data.mainImageIndex) || 0;
+  if (typeof data.isEnabled === 'string') {
+    data.isEnabled = data.isEnabled === 'true';
+  } else if (data.isEnabled === undefined) {
+    data.isEnabled = true;
+  }
+
+  // Parse imagesToDelete
+  if (typeof data.imagesToDelete === 'string') {
+    try {
+      data.imagesToDelete = JSON.parse(data.imagesToDelete);
+    } catch {
+      data.imagesToDelete = [];
+    }
+  }
+
+  // Default values
+  data.description = data.description || '';
+  data.blurDataURL = data.blurDataURL || '';
+  if (data.name) data.name = String(data.name).trim();
+  if (data.category) data.category = String(data.category).trim();
+
+  return data;
+}
+
 
 @Controller('catalog')
 export class CatalogController {
@@ -82,15 +86,19 @@ export class CatalogController {
     private readonly prisma: PrismaService,
   ) {}
 
+  /** Create Catalog */
   @Post()
-  @UseInterceptors(FilesInterceptor('images', 10))
-  async create(
+  @UseInterceptors(
+    FilesInterceptor('images', 10, {
+      limits: { fileSize: 10 * 1024 * 1024 },
+    }),
+  )
+  async createCatalog(
     @Body() formData: any,
     @UploadedFiles(
       new ParseFilePipe({
         validators: [
           new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
         ],
         fileIsRequired: false,
       }),
@@ -98,87 +106,35 @@ export class CatalogController {
     files?: Express.Multer.File[],
   ) {
     try {
-      // Debug logging
-      console.log('=== DEBUG: Create Catalog Request ===');
-      console.log('Form data received:', formData);
-      console.log('Files received:', files?.map(f => ({ 
-        originalname: f.originalname,
-        mimetype: f.mimetype,
-        size: f.size,
-        fieldname: f.fieldname 
-      })));
-      
       const transformedData = transformFormDataToDTO(formData);
-      console.log('Transformed data:', transformedData);
+      const imageUrls = files?.map(file => `/uploads/catalog_images/${file.filename}`) ?? [];
+      const mainIndex = Math.min(Number(transformedData.mainImageIndex) || 0, imageUrls.length - 1);
+      const primaryImage = imageUrls[mainIndex] ?? null;
 
-      const validationPipe = new ValidationPipe({
-        transform: true,
-        whitelist: true,
-        forbidNonWhitelisted: false,
-        skipMissingProperties: true,
-        forbidUnknownValues: false,
+      return await this.catalogService.createCatalog({
+        ...transformedData,
+        images: imageUrls,
+        ...(primaryImage && { image: primaryImage }),
       });
-
-      // Validate and transform into DTO
-      const createCatalogDto = (await validationPipe.transform(
-        transformedData,
-        { metatype: CreateCatalogDto, type: 'body' },
-      )) as CreateCatalogDto;
-      
-      console.log('DTO after validation:', createCatalogDto);
-
-      if (files && files.length > 0) {
-        console.log(`Processing ${files.length} uploaded files`);
-        createCatalogDto.images = files.map(file => 
-          normalizeImagePath(`/uploads/catalog_images/${file.filename}`)
-        );
-        
-        // Also set the primary image for backward compatibility
-        if (createCatalogDto.images.length > 0) {
-          const mainIndex = createCatalogDto.mainImageIndex || 0;
-          console.log(`Setting main image index: ${mainIndex}`);
-          createCatalogDto.image = createCatalogDto.images[
-            Math.min(mainIndex, createCatalogDto.images.length - 1)
-          ];
-          console.log(`Main image set to: ${createCatalogDto.image}`);
-        }
+    } catch (err) {
+      if (err instanceof HttpException) throw err;
+      if (err.message.includes('Invalid file type')) {
+        throw new HttpException('Invalid file type.', HttpStatus.BAD_REQUEST);
       }
-
-      const result = await this.catalogService.createCatalog(createCatalogDto);
-      return result;
-    } catch (error) {
-      console.error('Error in catalog creation:', error);
-      if (error instanceof Error) {
-        console.error('Error details:', error.message);
-        console.error('Error stack:', error.stack);
+      if (err?.code === 'P2002') {
+        throw new HttpException('Duplicate product name in category.', HttpStatus.CONFLICT);
       }
-      throw error;
+      throw new HttpException(`Failed to create product: ${err.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
-  @Get('date-range')
-  findByDateRange(
-    @Query('startDate') startDate: string,
-    @Query('endDate') endDate: string,
-  ) {
-    try {
-      return this.catalogService.findByDateRange(
-        new Date(startDate),
-        new Date(endDate),
-      );
-    } catch (error) {
-      throw new HttpException(
-        'Failed to search products by date range',
-        HttpStatus.INTERNAL_SERVER_ERROR,
-      );
-    }
-  }
-
+  /** Get by category */
   @Get('category/:categorySlug')
   findByCategory(@Param('categorySlug') categorySlug: string) {
     return this.catalogService.findByCategory(categorySlug);
   }
 
+  /** Get by slug or serve image */
   @Get(':categorySlug/:productSlug')
   async findBySlug(
     @Param('categorySlug') categorySlug: string,
@@ -188,125 +144,83 @@ export class CatalogController {
     if (categorySlug === 'images') {
       return res.redirect(normalizeImagePath(`/uploads/catalog_images/${productSlug}`));
     }
-
-    const catalog = await this.catalogService.findBySlug(
-      categorySlug,
-      productSlug,
-    );
-    return res.json(catalog);
+    return res.json(await this.catalogService.findBySlug(categorySlug, productSlug));
   }
 
+  /** Get by ID */
   @Get(':id')
   findOne(@Param('id') id: string) {
     const parsedId = parseInt(id, 10);
-    if (isNaN(parsedId)) {
-      throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
-    }
+    if (isNaN(parsedId)) throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
     return this.catalogService.findOne(parsedId);
   }
 
+  /** Get all or search */
   @Get()
   findAll(@Query() query) {
-    if (query.search) {
-      return this.catalogService.searchCatalogs(query.search);
-    }
-    return this.catalogService.findAll();
+    return query.search
+      ? this.catalogService.searchCatalogs(query.search)
+      : this.catalogService.findAll();
   }
 
+  /** Update Catalog */
   @Patch(':id')
   @UseInterceptors(FilesInterceptor('images', 10))
   async update(
     @Param('id') id: string,
     @Body() formData: any,
-    @UploadedFiles(
-      new ParseFilePipe({
-        validators: [
-          new MaxFileSizeValidator({ maxSize: 10 * 1024 * 1024 }),
-          new FileTypeValidator({ fileType: /(jpg|jpeg|png|gif)$/ }),
-        ],
-        fileIsRequired: false,
-      }),
-    )
-    files?: Express.Multer.File[],
+    @UploadedFiles() files?: Express.Multer.File[],
   ) {
     try {
       const transformedData = transformFormDataToDTO(formData);
+      const updateDto: UpdateCatalogDto = { ...transformedData };
 
-      const validationPipe = new ValidationPipe({
-        transform: true,
-        whitelist: true,
-        forbidNonWhitelisted: false,
-        skipMissingProperties: true,
-      });
-
-      const updateCatalogDto = (await validationPipe.transform(
-        transformedData,
-        { metatype: UpdateCatalogDto, type: 'body' },
-      )) as UpdateCatalogDto;
-
-      if (files && files.length > 0) {
-        updateCatalogDto.images = files.map(file => 
-          normalizeImagePath(`/uploads/catalog_images/${file.filename}`)
+      if (files?.length) {
+        updateDto.images = files.map(file =>
+          normalizeImagePath(`/uploads/catalog_images/${file.filename}`),
         );
-        
-        // Also update the primary image for backward compatibility
+
         const existingProduct = await this.catalogService.findOne(+id);
         const allImages = [
           ...(existingProduct.image ? [existingProduct.image] : []),
-          ...updateCatalogDto.images
+          ...updateDto.images,
         ];
-        
-        if (allImages.length > 0) {
-          const mainIndex = updateCatalogDto.mainImageIndex || 0;
-          updateCatalogDto.image = allImages[
-            Math.min(mainIndex, allImages.length - 1)
-          ];
+        if (allImages.length) {
+          const mainIndex = updateDto.mainImageIndex || 0;
+          updateDto.image = allImages[Math.min(mainIndex, allImages.length - 1)];
         }
       }
 
-      return this.catalogService.updateCatalog(+id, updateCatalogDto);
+      return this.catalogService.updateCatalog(+id, updateDto);
     } catch (error) {
-      if (
-        error instanceof HttpException &&
-        error.getStatus() === HttpStatus.BAD_REQUEST
-      ) {
-        const response = error.getResponse();
-      }
-      throw error;
+      if (error instanceof HttpException) throw error;
+      throw new HttpException(`Failed to update product: ${error.message}`, HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 
+  /** Soft delete */
   @Delete(':id')
   remove(@Param('id') id: string) {
     return this.catalogService.remove(+id);
   }
 
-
+  /** Force delete with cart cleanup */
   @Delete(':id/force')
   async forceRemove(@Param('id') id: string) {
     const parsedId = parseInt(id, 10);
-
-    if (isNaN(parsedId)) {
-      throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
-    }
+    if (isNaN(parsedId)) throw new HttpException('Invalid ID format', HttpStatus.BAD_REQUEST);
 
     try {
-      
-      const cartResult =
-        await this.cartService.removeAllCartItemsByCatalogId(parsedId);
-
+      const cartResult = await this.cartService.removeAllCartItemsByCatalogId(parsedId);
       const deletedCatalog = await this.catalogService.remove(parsedId);
 
       return {
         success: true,
-        message: `Product deleted successfully. ${cartResult.count} cart items were removed.`,
+        message: `Product deleted successfully. ${cartResult.count} cart items removed.`,
         deletedCatalog,
       };
     } catch (error) {
-      throw new HttpException(
-        error.message || 'Failed to delete product',
-        error.status || HttpStatus.INTERNAL_SERVER_ERROR,
-      );
+      throw new HttpException(error.message || 'Failed to delete product', error.status || HttpStatus.INTERNAL_SERVER_ERROR);
     }
   }
 }

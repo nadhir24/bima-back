@@ -292,7 +292,10 @@ export class CartService {
       });
       return aggregateResult._sum.quantity ?? 0;
     } catch (error) {
-      return 0;
+      throw new HttpException(
+        'Failed to get cart item count',
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
   }
 

@@ -41,7 +41,7 @@ import { extname, join } from 'path';
         },
       }),
       fileFilter: (req, file, cb) => {
-        if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/)) {
+        if (!file.originalname.match(/\.(jpg|jpeg|png|gif)$/i)) {
           return cb(new Error('Only image files are allowed!'), false);
         }
         cb(null, true);
