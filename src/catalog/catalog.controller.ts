@@ -204,6 +204,16 @@ export class CatalogController {
     return this.catalogService.remove(+id);
   }
 
+  /** Delete a specific size by its ID */
+  @Delete('size/:id')
+  removeSize(@Param('id') id: string) {
+    const parsedId = parseInt(id, 10);
+    if (isNaN(parsedId)) {
+      throw new HttpException('Invalid Size ID format', HttpStatus.BAD_REQUEST);
+    }
+    return this.catalogService.removeSize(parsedId);
+  }
+
   /** Force delete with cart cleanup */
   @Delete(':id/force')
   async forceRemove(@Param('id') id: string) {

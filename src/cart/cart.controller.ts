@@ -26,6 +26,8 @@ import { UpdateCartDto } from './dto/update-cart.dto';
 export class CartController {
   constructor(private readonly cartService: CartService) {}
 
+
+
   private formatCartResponse(cart: any) {
     return {
       id: cart.id,
@@ -48,6 +50,7 @@ export class CartController {
         : null,
     };
   }
+
   @Get()
   async findAllCart() {
     return this.cartService.FindAllCart();
@@ -60,11 +63,14 @@ export class CartController {
     @Req() req?: Request,
   ) {
     let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
-    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
+    // Always use server-side session ID for guests to avoid stale client guestId
+    const guestId = !userId ? req?.sessionID : null;
 
     if (!userId && !guestId) {
       return 'Rp0';
     }
+
+
 
     const totalNumber = await this.cartService.getCartTotal(userId, guestId);
 
@@ -101,14 +107,10 @@ export class CartController {
   @Post('add')
   async addToCart(@Body() createCartDto: CreateCartDto, @Req() req: Request) {
     try {
-      let guestId = createCartDto.guestId;
+      // Always derive guestId from current session for guest users to avoid stale IDs from client
+      const guestId = createCartDto.userId ? null : req.sessionID;
       if (!createCartDto.userId && !guestId) {
-        guestId = req.sessionID;
-        if (!guestId) {
-          throw new BadRequestException(
-            'Session ID is required for guest users',
-          );
-        }
+        throw new BadRequestException('Session ID is required for guest users');
       }
 
       if (
@@ -155,8 +157,8 @@ export class CartController {
         throw new BadRequestException('Quantity is required for update.');
 
       const userId = updateCartDto.userId || null;
-      const guestId =
-        !userId && guestIdParam ? guestIdParam : !userId ? req.sessionID : null;
+      // Enforce guestId from session only when unauthenticated
+      const guestId = !userId ? req.sessionID : null;
 
       const result = await this.cartService.updateCartItem(
         userId,
@@ -206,8 +208,8 @@ export class CartController {
         userId = (req.user as any).id;
       }
 
-      const guestId =
-        !userId && guestIdParam ? guestIdParam : !userId ? req.sessionID : null;
+      // Enforce guestId from session only when unauthenticated
+      const guestId = !userId ? req.sessionID : null;
 
       const result = await this.cartService.removeCartItem(
         userId,
@@ -228,55 +230,49 @@ export class CartController {
     }
   }
 
-  @UseGuards(AuthGuard('jwt'))
   @Post('sync')
+  @UseGuards(AuthGuard('jwt'))
   async syncCart(
     @Req() req: Request,
-    @Body('cart', new ValidationPipe({ transform: true }))
-    guestCart: Array<{ catalogId: number; sizeId: number; quantity: number }>,
+    @Body('cart') cartItems: any[],
+    @Body('guestId') guestId: string,
   ) {
-    const userId = (req.user as { id: number }).id;
-    const guestId = req.sessionID;
-    if (!guestCart?.length) return { message: 'No cart data to sync' };
-    return await this.cartService.syncCart(userId, guestId);
+    const userId = req.user.id;
+
+    if (!cartItems || !Array.isArray(cartItems)) {
+      throw new BadRequestException('Invalid cart data provided.');
+    }
+
+    if (!guestId) {
+      return { message: 'No guestId provided, nothing to sync or clear.' };
+    }
+
+    return this.cartService.syncCart(userId, guestId, cartItems);
   }
 
   @Get('guest-session')
   async getGuestSession(@Req() req: Request, @Res() res: Response) {
-    const guestId = req.sessionID;
-    
     try {
-      // Langkah 1: Delete semua item keranjang untuk guest ID ini
-      await this.cartService.removeManyCarts({
-        where: { guestId: guestId }
-      });
-      
-      // Langkah 2: Verifikasi semua item sudah terhapus dengan membaca ulang
-      const remainingItems = await this.cartService.findManyCarts({
-        where: { guestId: guestId }
-      });
-      
-      // Jika masih ada item tersisa, paksa hapus sekali lagi
-      if (remainingItems.length > 0) {
-        console.warn(`Found ${remainingItems.length} remaining items after cleanup for guestId=${guestId}, forcing delete again`);
-        await this.cartService.removeManyCarts({
-          where: { guestId: guestId }
-        });
-      }
-      
-      // Langkah 3: Return the guest ID
-      res.send({ 
+      // This is the definitive entry point for a guest.
+      // We will create the session and clean any associated cart here.
+      const guestId = req.sessionID;
+
+      // Mark as guest
+      req.session.isGuest = true;
+
+      // Clean any existing cart items for this session ID.
+      // This is crucial for ensuring a fresh start.
+      await this.cartService.removeManyCarts({ where: { guestId } });
+
+      // Return the guestId to the client.
+      res.status(HttpStatus.OK).send({
         guestId: guestId,
-        isClean: true, 
-        message: "New guest session created with empty cart" 
+        message: 'Guest session created and cart cleared.',
       });
     } catch (error) {
-      // Jika terjadi error saat pembersihan, tetap kirim guestId tetapi beri tahu klien
-      console.error(`Error cleaning up cart for guestId=${guestId}:`, error);
-      res.status(200).send({ 
-        guestId: guestId,
-        isClean: false,
-        message: "Guest session created but cart cleanup might be incomplete" 
+      console.error('Failed to create guest session:', error);
+      res.status(HttpStatus.INTERNAL_SERVER_ERROR).send({
+        message: 'Failed to create guest session.',
       });
     }
   }
@@ -288,11 +284,14 @@ export class CartController {
     @Req() req?: Request,
   ) {
     let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
-    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
+    // Ignore client-provided guestId; rely on current session only
+    const guestId = !userId ? req?.sessionID : null;
 
     if (!userId && !guestId) {
       return { count: 0 };
     }
+
+
 
     const count = await this.cartService.getCartItemCount(userId, guestId);
     return { count };
@@ -305,11 +304,14 @@ export class CartController {
     @Req() req?: Request,
   ) {
     let userId = userIdQuery ? parseInt(userIdQuery, 10) : null;
-    const guestId = !userId ? guestIdQuery || req?.sessionID : null;
+    // Prevent using stale guestId from client; always use sessionID
+    const guestId = !userId ? req?.sessionID : null;
 
     if (!userId && !guestId) {
       return [];
     }
+
+
 
     const whereClause = userId ? { userId: userId } : { guestId: guestId };
 
@@ -372,8 +374,8 @@ export class CartController {
   @Delete('clear-guest-cart')
   async clearGuestCart(@Req() req: Request, @Query('guestId') guestIdParam?: string) {
     try {
-      // Prioritaskan guestId dari query dulu, jika tidak ada gunakan sessionID
-      const guestId = guestIdParam || req.sessionID;
+      // Selalu gunakan sessionID server untuk identitas guest saat menghapus cart
+      const guestId = req.sessionID;
       
       if (!guestId) {
         throw new BadRequestException('Guest ID is required');

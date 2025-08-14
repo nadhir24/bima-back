@@ -233,22 +233,30 @@ export class CartService {
 
   async syncCart(
     userId: number,
-    guestId: string,
+    guestId: string, // guestId from session
+    cartItems: any[],
   ): Promise<{ message: string }> {
-    const guestCarts = await this.findManyCarts({ where: { guestId } });
+    // 1. Sync all items from guest cart to user cart
     await Promise.all(
-      guestCarts.map(async (guestCart) => {
-        await this.addToCart(
-          userId,
-          null,
-          guestCart.catalogId,
-          guestCart.sizeId,
-          guestCart.quantity,
-        );
-        await this.prisma.cart.delete({ where: { id: guestCart.id } });
+      cartItems.map(async (item) => {
+        if (item.catalog?.id && item.size?.id && item.quantity) {
+          await this.addToCart(
+            userId,
+            null, // guestId is null because we are assigning to a user
+            item.catalog.id,
+            item.size.id,
+            item.quantity,
+          );
+        }
       }),
     );
-    return { message: 'Cart synced successfully' };
+
+    // 2. If guestId exists, delete all cart items associated with it
+    if (guestId) {
+      await this.removeManyCarts({ where: { guestId } });
+    }
+
+    return { message: 'Cart synced and guest cart cleared successfully' };
   }
 
   async removeManyCarts(

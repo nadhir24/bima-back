@@ -52,6 +52,7 @@ model Size {
   invoiceItems InvoiceItem[]
   catalog      Catalog       @relation("CatalogSizes", fields: [catalogId], references: [id])
 
+  @@index([catalogId])
   @@map("sizes")
 }
 

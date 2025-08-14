@@ -645,6 +645,35 @@ export class CatalogService {
     }
   }
 
+  async removeSize(sizeId: number): Promise<{ success: boolean; message: string }> {
+    // First, find the size to get its catalogId
+    const size = await this.prisma.size.findUnique({
+      where: { id: sizeId },
+      select: { catalogId: true },
+    });
+
+    if (!size) {
+      throw new HttpException('Size not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Then, count how many sizes are left for this catalog
+    const sizeCount = await this.prisma.size.count({
+      where: { catalogId: size.catalogId },
+    });
+
+    // Prevent deleting the last size
+    if (sizeCount <= 1) {
+      throw new HttpException(
+        'Cannot delete the last size of a product.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Proceed with deletion
+    await this.prisma.size.delete({ where: { id: sizeId } });
+
+    return { success: true, message: 'Size deleted successfully.' };
+  }
 
   async deductQuantity(
     catalogId: number,

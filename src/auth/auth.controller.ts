@@ -1,9 +1,27 @@
-import { Controller, Get, Req } from '@nestjs/common';
+import { Controller, Get, Post, Req, Res, HttpCode, HttpStatus, InternalServerErrorException } from '@nestjs/common';
 import { AuthService } from './auth/auth.service';
+import { Request, Response } from 'express';
 
 @Controller('auth')
 export class AuthTokenController {
   constructor(private readonly authService: AuthService) {}
+
+  @Post('logout')
+  @HttpCode(HttpStatus.OK)
+  async logout(@Req() req: Request, @Res({ passthrough: true }) res: Response) {
+    return new Promise((resolve, reject) => {
+      req.session.destroy((err) => {
+        if (err) {
+          console.error('Logout error:', err);
+          return reject(
+            new InternalServerErrorException('Could not log out.'),
+          );
+        }
+        res.clearCookie('connect.sid'); // Default session cookie name
+        resolve({ message: 'Logged out successfully' });
+      });
+    });
+  }
 
   /**
    * Simple endpoint to check if token is valid.
