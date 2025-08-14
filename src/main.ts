@@ -69,9 +69,16 @@ async function bootstrap() {
   });
   const logger = new Logger('Bootstrap');
 
+  // Determine prod-like environment (Railway, Vercel, etc.)
+  const isProdLike =
+    process.env.NODE_ENV === 'production' ||
+    !!process.env.RAILWAY_ENVIRONMENT ||
+    !!process.env.VERCEL ||
+    !!process.env.RENDER;
+
   // If running behind a proxy/HTTPS terminator (common in production),
   // trust the proxy so Secure cookies and protocol are handled correctly
-  if (process.env.NODE_ENV === 'production') {
+  if (isProdLike) {
     app.set('trust proxy', 1);
   }
 
@@ -103,17 +110,32 @@ async function bootstrap() {
   app.use(json({ limit: '50mb' }));
   app.use(urlencoded({ extended: true, limit: '50mb' }));
 
+  // Allow cross-site credentials from the frontend domain
+  app.enableCors({
+    origin: (origin, callback) => callback(null, true),
+    credentials: true,
+    methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
+    allowedHeaders: 'Content-Type, Authorization',
+  });
+
+  // Compute cookie settings
+  const cookieSameSite = isProdLike ? 'none' : 'lax';
+  const cookieSecure = isProdLike ? true : false;
+  logger.log(
+    `Session cookie config -> sameSite=${cookieSameSite}, secure=${cookieSecure}, httpOnly=true, trustProxy=${isProdLike}`,
+  );
+
   app.use(
     session({
       secret: process.env.SESSION_SECRET || 'bimasecret123',
       resave: false,
       saveUninitialized: true,
       cookie: {
-        secure: process.env.NODE_ENV === 'production',
+        secure: cookieSecure,
         httpOnly: true,
         // For cross-site requests from a separate frontend domain, cookies
         // must be SameSite=None and Secure=true to be sent on XHR/fetch
-        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
+        sameSite: cookieSameSite as any,
         maxAge: 30 * 24 * 60 * 60 * 1000,
       },
     }),
