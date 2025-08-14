@@ -69,6 +69,12 @@ async function bootstrap() {
   });
   const logger = new Logger('Bootstrap');
 
+  // If running behind a proxy/HTTPS terminator (common in production),
+  // trust the proxy so Secure cookies and protocol are handled correctly
+  if (process.env.NODE_ENV === 'production') {
+    app.set('trust proxy', 1);
+  }
+
   // Ensure upload directories exist
   const uploadsDir = join(process.cwd(), 'uploads');
   if (!existsSync(uploadsDir)) {
@@ -104,6 +110,10 @@ async function bootstrap() {
       saveUninitialized: true,
       cookie: {
         secure: process.env.NODE_ENV === 'production',
+        httpOnly: true,
+        // For cross-site requests from a separate frontend domain, cookies
+        // must be SameSite=None and Secure=true to be sent on XHR/fetch
+        sameSite: process.env.NODE_ENV === 'production' ? 'none' : 'lax',
         maxAge: 30 * 24 * 60 * 60 * 1000,
       },
     }),
