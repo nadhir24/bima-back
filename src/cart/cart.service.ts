@@ -328,10 +328,11 @@ export class CartService {
       }
 
       const total = cartItems.reduce((accumulator, item) => {
-        const priceString = item.size.price || '0';
-
-        const numericPrice = Number(priceString.replace(/Rp|\./g, ''));
-
+        const priceRaw = (item.size as any)?.price ?? '0';
+        const priceStr = String(priceRaw);
+        // Remove all non-digits to avoid NaN from malformed strings, e.g. 'Rp123.t23'
+        const digits = priceStr.replace(/[^0-9]/g, '');
+        const numericPrice = digits.length > 0 ? Number(digits) : 0;
         return accumulator + numericPrice * item.quantity;
       }, 0);
 
