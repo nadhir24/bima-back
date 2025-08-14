@@ -290,13 +290,14 @@ export class CartService {
     guestId: string | null,
   ): Promise<number> {
     try {
+      // Important: do NOT use OR with userId=null, it will match all guest rows
+      const where = userId !== null
+        ? { userId }
+        : { guestId: guestId || undefined };
+
       const aggregateResult = await this.prisma.cart.aggregate({
-        _sum: {
-          quantity: true,
-        },
-        where: {
-          OR: [{ userId: userId }, { guestId: guestId || undefined }],
-        },
+        _sum: { quantity: true },
+        where,
       });
       return aggregateResult._sum.quantity ?? 0;
     } catch (error) {
@@ -312,10 +313,13 @@ export class CartService {
     guestId: string | null,
   ): Promise<number> {
     try {
+      // Important: when guest, filter strictly by session guestId
+      const where = userId !== null
+        ? { userId }
+        : { guestId: guestId || undefined };
+
       const cartItems = await this.findManyCarts({
-        where: {
-          OR: [{ userId: userId }, { guestId: guestId || undefined }],
-        },
+        where,
         include: { size: true },
       });
 
