@@ -236,6 +236,7 @@ export class CartController {
     @Req() req: Request,
     @Body('cart') cartItems: any[],
     @Body('guestId') guestId: string,
+    @Body('confirmMerge') confirmMerge?: boolean,
   ) {
     const userId = req.user.id;
 
@@ -247,7 +248,14 @@ export class CartController {
       return { message: 'No guestId provided, nothing to sync or clear.' };
     }
 
-    return this.cartService.syncCart(userId, guestId, cartItems);
+    // Only merge when explicitly confirmed (e.g., right after registration)
+    if (confirmMerge === true) {
+      return this.cartService.syncCart(userId, guestId, cartItems);
+    }
+
+    // If not confirmed, skip merging and just clear the guest cart to avoid leaking items
+    await this.cartService.removeManyCarts({ where: { guestId } });
+    return { message: 'Guest cart cleared without merging (merge not confirmed).' };
   }
 
   @Get('guest-session')
