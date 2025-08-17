@@ -214,11 +214,18 @@ export class PaymentService {
       if (search && search.trim() !== '') {
         where.OR = [
           { midtransOrderId: { contains: search, mode: 'insensitive' } },
+          { paymentUrl: { contains: search, mode: 'insensitive' } },
+          { midtransInvoiceUrl: { contains: search, mode: 'insensitive' } },
+          { shippingFirstName: { contains: search, mode: 'insensitive' } },
+          { shippingLastName: { contains: search, mode: 'insensitive' } },
+          { shippingEmail: { contains: search, mode: 'insensitive' } },
+          { shippingPhone: { contains: search, mode: 'insensitive' } },
           {
             user: {
               OR: [
                 { fullName: { contains: search, mode: 'insensitive' } },
                 { email: { contains: search, mode: 'insensitive' } },
+                { phoneNumber: { contains: search, mode: 'insensitive' } },
               ],
             },
           },

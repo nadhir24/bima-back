@@ -144,6 +144,60 @@ export class CartController {
     }
   }
 
+  // Place static routes before dynamic param routes to avoid shadowing
+  // Endpoint baru untuk menghapus semua item di keranjang guest secara otomatis
+  @Delete('clear-guest-cart')
+  async clearGuestCart(@Req() req: Request, @Query('guestId') guestIdParam?: string) {
+    try {
+      // Selalu gunakan sessionID server untuk identitas guest saat menghapus cart
+      const guestId = req.sessionID;
+      
+      if (!guestId) {
+        throw new BadRequestException('Guest ID is required');
+      }
+      
+      // Hapus semua item keranjang untuk guestId ini
+      const result = await this.cartService.removeManyCarts({
+        where: { guestId }
+      });
+      
+      return {
+        success: true,
+        message: `Successfully cleared guest cart with ${result.count} items`,
+        count: result.count
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Failed to clear guest cart',
+        statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR
+      };
+    }
+  }
+
+  // GET alias untuk klien yang memanggil via GET (mis. link langsung atau keterbatasan metode)
+  @Get('clear-guest-cart')
+  async clearGuestCartGetAlias(@Req() req: Request) {
+    try {
+      const guestId = req.sessionID;
+      if (!guestId) {
+        throw new BadRequestException('Guest ID is required');
+      }
+      const result = await this.cartService.removeManyCarts({ where: { guestId } });
+      return {
+        success: true,
+        message: `Successfully cleared guest cart with ${result.count} items (GET alias)`,
+        count: result.count,
+      };
+    } catch (error) {
+      return {
+        success: false,
+        message: error.message || 'Failed to clear guest cart (GET alias)',
+        statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR,
+      };
+    }
+  }
+
   @Put(':cartId')
   async updateCartItem(
     @Param('cartId', ParseIntPipe) cartId: number,
@@ -238,24 +292,34 @@ export class CartController {
     @Body('guestId') guestId: string,
     @Body('confirmMerge') confirmMerge?: boolean,
   ) {
-    const userId = req.user.id;
+    try {
+      // Enhanced error checking for user authentication
+      if (!req.user || !req.user.id) {
+        throw new BadRequestException('User authentication failed - no user ID found in request');
+      }
 
-    if (!cartItems || !Array.isArray(cartItems)) {
-      throw new BadRequestException('Invalid cart data provided.');
+      const userId = req.user.id;
+
+      if (!cartItems || !Array.isArray(cartItems)) {
+        throw new BadRequestException('Invalid cart data provided.');
+      }
+
+      if (!guestId) {
+        return { message: 'No guestId provided, nothing to sync or clear.' };
+      }
+
+      // Only merge when explicitly confirmed (e.g., right after registration)
+      if (confirmMerge === true) {
+        return this.cartService.syncCart(userId, guestId, cartItems);
+      }
+
+      // If not confirmed, skip merging and just clear the guest cart to avoid leaking items
+      await this.cartService.removeManyCarts({ where: { guestId } });
+      return { message: 'Guest cart cleared without merging (merge not confirmed).' };
+    } catch (error) {
+      console.error('Cart sync error:', error);
+      throw new BadRequestException(`Cart sync failed: ${error.message}`);
     }
-
-    if (!guestId) {
-      return { message: 'No guestId provided, nothing to sync or clear.' };
-    }
-
-    // Only merge when explicitly confirmed (e.g., right after registration)
-    if (confirmMerge === true) {
-      return this.cartService.syncCart(userId, guestId, cartItems);
-    }
-
-    // If not confirmed, skip merging and just clear the guest cart to avoid leaking items
-    await this.cartService.removeManyCarts({ where: { guestId } });
-    return { message: 'Guest cart cleared without merging (merge not confirmed).' };
   }
 
   @Get('guest-session')
@@ -379,32 +443,4 @@ export class CartController {
   }
 
   // Endpoint baru untuk menghapus semua item di keranjang guest secara otomatis
-  @Delete('clear-guest-cart')
-  async clearGuestCart(@Req() req: Request, @Query('guestId') guestIdParam?: string) {
-    try {
-      // Selalu gunakan sessionID server untuk identitas guest saat menghapus cart
-      const guestId = req.sessionID;
-      
-      if (!guestId) {
-        throw new BadRequestException('Guest ID is required');
-      }
-      
-      // Hapus semua item keranjang untuk guestId ini
-      const result = await this.cartService.removeManyCarts({
-        where: { guestId }
-      });
-      
-      return {
-        success: true,
-        message: `Successfully cleared guest cart with ${result.count} items`,
-        count: result.count
-      };
-    } catch (error) {
-      return {
-        success: false,
-        message: error.message || 'Failed to clear guest cart',
-        statusCode: error.status || HttpStatus.INTERNAL_SERVER_ERROR
-      };
-    }
-  }
 }

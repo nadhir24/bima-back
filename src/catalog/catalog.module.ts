@@ -6,7 +6,7 @@ import { SnapModule } from 'src/payment/snap/snap.module';
 import { MulterModule } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { existsSync, mkdirSync } from 'fs';
-import { extname, join } from 'path';
+import { extname, join, parse } from 'path';
 import { CartModule } from 'src/cart/cart.module';
 
 @Module({
@@ -26,7 +26,11 @@ import { CartModule } from 'src/cart/cart.module';
         },
         filename: (req, file, cb) => {
           const uniqueSuffix = Date.now();
-          const fileName = `${file.originalname.replace(/\s+/g, '_')}-${uniqueSuffix}${extname(file.originalname)}`;
+          const original = file.originalname.replace(/\s+/g, '_');
+          const { name, ext } = parse(original);
+          // Ensure single extension, e.g. IMG.jpg -> IMG-<ts>.jpg (not IMG.jpg-<ts>.jpg)
+          const safeBase = name.replace(/[^A-Za-z0-9._-]/g, '_');
+          const fileName = `${safeBase}-${uniqueSuffix}${ext || extname(original)}`;
           cb(null, fileName);
         },
       }),

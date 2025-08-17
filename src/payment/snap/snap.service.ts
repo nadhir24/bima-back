@@ -145,6 +145,39 @@ export class SnapService {
         }, 0);
         this.logger.log(`💰 Calculated Total Amount: ${totalAmount}`);
 
+        // 2.1 Reuse existing PENDING invoice (idempotent checkout)
+        // Determine correct identifier for query (user vs guest)
+        let userIdToUse: number | null = null;
+        if (userId !== null && userId !== undefined) {
+          userIdToUse = typeof (userId as any) === 'string' ? parseInt(userId as any, 10) : (userId as number);
+          if (Number.isNaN(userIdToUse as number)) {
+            this.logger.error(`Invalid userId format: ${userId}`);
+            throw new BadRequestException('Format User ID tidak valid');
+          }
+        }
+
+        const existingPending = await prisma.invoice.findFirst({
+          where: {
+            status: 'PENDING',
+            ...(userIdToUse ? { userId: userIdToUse } : { guestId: guestId || undefined }),
+            // Optional: also match amount to be safer
+            amount: totalAmount,
+          },
+          include: { items: true, user: true, payment: true },
+          orderBy: { createdAt: 'desc' },
+        });
+
+        if (existingPending) {
+          this.logger.warn(
+            `♻️ Reusing existing PENDING invoice ID=${existingPending.id} for ${userIdToUse ? `user ${userIdToUse}` : `guest ${guestId}`}.`,
+          );
+          return {
+            paymentLink: existingPending.paymentUrl || existingPending.midtransInvoiceUrl || null,
+            invoice: existingPending,
+            message: 'Existing pending invoice reused.',
+          };
+        }
+
         // 3. Prepare Midtrans Payload (Keep existing logic, ensure customer details use payload/shippingAddress)
         const itemDetails = cartItems.map((item) => {
           const price = parseFloat(
@@ -283,19 +316,7 @@ export class SnapService {
           `💾 Saving invoice to DB for Order ID: ${midtransPayload.transaction_details.order_id}`,
         );
 
-        // Pastikan userId berupa integer (karena bisa jadi diterima sebagai string)
-        let userIdToUse = null;
-        if (userId !== null) {
-          // Konversi userId ke integer jika string
-          userIdToUse =
-            typeof userId === 'string' ? parseInt(userId, 10) : userId;
-
-          // Validasi hasil konversi
-          if (isNaN(userIdToUse)) {
-            this.logger.error(`Invalid userId format: ${userId}`);
-            throw new BadRequestException('Format User ID tidak valid');
-          }
-        }
+        // userIdToUse already computed above
 
         const savedInvoice = await prisma.invoice.create({
           data: {

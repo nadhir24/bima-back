@@ -236,27 +236,49 @@ export class CartService {
     guestId: string, // guestId from session
     cartItems: any[],
   ): Promise<{ message: string }> {
-    // 1. Sync all items from guest cart to user cart
-    await Promise.all(
-      cartItems.map(async (item) => {
-        if (item.catalog?.id && item.size?.id && item.quantity) {
-          await this.addToCart(
-            userId,
-            null, // guestId is null because we are assigning to a user
-            item.catalog.id,
-            item.size.id,
-            item.quantity,
-          );
-        }
-      }),
-    );
+    try {
+      console.log(`Starting cart sync for userId: ${userId}, guestId: ${guestId}, items: ${cartItems.length}`);
+      
+      // 1. Sync all items from guest cart to user cart
+      const syncResults = await Promise.allSettled(
+        cartItems.map(async (item, index) => {
+          if (item.catalog?.id && item.size?.id && item.quantity) {
+            console.log(`Syncing item ${index}: catalogId=${item.catalog.id}, sizeId=${item.size.id}, quantity=${item.quantity}`);
+            return await this.addToCart(
+              userId,
+              null, // guestId is null because we are assigning to a user
+              item.catalog.id,
+              item.size.id,
+              item.quantity,
+            );
+          } else {
+            console.warn(`Skipping invalid item ${index}:`, item);
+            return null;
+          }
+        }),
+      );
 
-    // 2. If guestId exists, delete all cart items associated with it
-    if (guestId) {
-      await this.removeManyCarts({ where: { guestId } });
+      // Check for any failed sync operations
+      const failedSyncs = syncResults.filter(result => result.status === 'rejected');
+      if (failedSyncs.length > 0) {
+        console.error('Some cart items failed to sync:', failedSyncs);
+      }
+
+      // 2. If guestId exists, delete all cart items associated with it
+      if (guestId) {
+        console.log(`Clearing guest cart for guestId: ${guestId}`);
+        await this.removeManyCarts({ where: { guestId } });
+      }
+
+      console.log('Cart sync completed successfully');
+      return { message: 'Cart synced and guest cart cleared successfully' };
+    } catch (error) {
+      console.error('Cart sync failed:', error);
+      throw new HttpException(
+        `Cart sync failed: ${error.message}`,
+        HttpStatus.INTERNAL_SERVER_ERROR,
+      );
     }
-
-    return { message: 'Cart synced and guest cart cleared successfully' };
   }
 
   async removeManyCarts(
