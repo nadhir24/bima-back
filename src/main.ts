@@ -197,7 +197,13 @@ async function bootstrap() {
         /^\/uploads\/(catalog_images|users)\/.*\.(jpg|jpeg|png|gif)$/i,
       )
     ) {
-      const imagePath = join(process.cwd(), req.url);
+      // Resolve image path under the uploads root. Avoid joining an absolute URL
+      // which on Windows would incorrectly resolve to C:\uploads\...
+      const uploadsRoot = join(process.cwd(), 'uploads');
+      const relPath = req.url.replace(/^\/uploads\//, '');
+      // Basic traversal guard
+      const safeRelPath = relPath.replace(/\.\.\//g, '').replace(/\.\.\\/g, '');
+      const imagePath = join(uploadsRoot, safeRelPath);
 
       if (!existsSync(imagePath)) {
         // Send a default image or 404 with proper CORS headers
