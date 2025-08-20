@@ -45,6 +45,47 @@ export class CatalogService {
     return catalogs.map(catalog => this.fixImageUrl(catalog));
   }
 
+  // Normalize a size record into a canonical key (label + price)
+  private sizeKey(input: { size?: string; price?: string | number }): string {
+    const label = String(input.size ?? '').trim().toLowerCase();
+    const price = this.formatPrice(input.price ?? '');
+    return `${label}|${price}`;
+    }
+
+  // Prepare sizes for update: dedupe by key and merge quantities. Returns
+  // a unique list to update/create and a list of duplicate size IDs to delete.
+  private prepareDedupeSizes(
+    sizes: Array<{ id?: number; size?: string; price?: string | number; qty?: string | number }>,
+  ): { unique: Array<{ id?: number; size?: string; price?: string | number; qty?: string | number }>; duplicateIdsToDelete: number[] } {
+    const map = new Map<string, { id?: number; size?: string; price?: string | number; qty?: number }>();
+    const duplicates: number[] = [];
+
+    const toNum = (v: any) => {
+      if (typeof v === 'number') return v;
+      const n = Number(String(v ?? '').replace(/[^0-9.]/g, ''));
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    for (const s of sizes || []) {
+      const key = this.sizeKey(s);
+      const qtyNum = toNum(s.qty);
+      if (!map.has(key)) {
+        map.set(key, { id: s.id, size: s.size, price: this.formatPrice(s.price ?? ''), qty: qtyNum });
+      } else {
+        const existing = map.get(key)!;
+        // Prefer keeping an existing ID if present; accumulate qty
+        if (!existing.id && s.id) existing.id = s.id;
+        existing.qty = (existing.qty ?? 0) + qtyNum;
+        // Track duplicate IDs (so we can delete extra rows later)
+        if (s.id) duplicates.push(s.id);
+      }
+    }
+
+    const unique = Array.from(map.values()).map(u => ({ ...u }));
+    const duplicateIdsToDelete = duplicates.filter(Boolean);
+    return { unique, duplicateIdsToDelete };
+  }
+
    createSlug(
     name: string,
     category: string,
@@ -391,7 +432,18 @@ export class CatalogService {
     }
 
     if (updateCatalogDto.sizes?.length > 0) {
-      await this.handleSizesUpdate(id, updateCatalogDto.sizes);
+      // Dedupe sizes: merge same label+price and collect duplicates to delete
+      const { unique, duplicateIdsToDelete } = this.prepareDedupeSizes(updateCatalogDto.sizes as any);
+
+      // Apply normalized unique sizes
+      await this.handleSizesUpdate(id, unique as any);
+
+      // Clean up duplicate rows (if any existed with distinct IDs)
+      if (duplicateIdsToDelete.length > 0) {
+        await this.prisma.size.deleteMany({
+          where: { id: { in: duplicateIdsToDelete } },
+        });
+      }
     }
 
     try {
