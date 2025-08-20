@@ -168,14 +168,59 @@ export class SnapService {
         });
 
         if (existingPending) {
-          this.logger.warn(
-            `♻️ Reusing existing PENDING invoice ID=${existingPending.id} for ${userIdToUse ? `user ${userIdToUse}` : `guest ${guestId}`}.`,
-          );
-          return {
-            paymentLink: existingPending.paymentUrl || existingPending.midtransInvoiceUrl || null,
-            invoice: existingPending,
-            message: 'Existing pending invoice reused.',
-          };
+          // Before reusing, verify it is still actually pending on Midtrans and not too old
+          let canReuse = true;
+          let midtransStatus: string | null = null;
+          try {
+            const serverKey = this.configService.get<string>('MIDTRANS_SERVER_KEY');
+            if (serverKey && existingPending.midtransOrderId) {
+              const auth = `Basic ${Buffer.from(serverKey + ':').toString('base64')}`;
+              const statusUrl = `${this.midtransApiUrl}/v2/${existingPending.midtransOrderId}/status`;
+              const statusRes = await axios.get(statusUrl, {
+                headers: { Authorization: auth },
+                timeout: 8000,
+              });
+              midtransStatus = statusRes?.data?.transaction_status || null;
+              const terminalStatuses = ['expire', 'expired', 'cancel', 'deny', 'failure', 'refund', 'chargeback'];
+              if (midtransStatus && terminalStatuses.includes(midtransStatus)) {
+                canReuse = false;
+              }
+            }
+          } catch (e) {
+            // If status check fails we fall back to age-based guard
+            this.logger.warn('Midtrans status check failed, using age guard.', { error: (e as any)?.message });
+          }
+
+          // Age-based guard to avoid reusing very old pending invoices
+          const maxMinutes = parseInt(this.configService.get<string>('PENDING_REUSE_MAX_MINUTES') || '45', 10);
+          const ageMinutes = (Date.now() - new Date(existingPending.createdAt).getTime()) / 60000;
+          if (ageMinutes > maxMinutes) {
+            canReuse = false;
+          }
+
+          if (canReuse) {
+            this.logger.warn(
+              `♻️ Reusing existing PENDING invoice ID=${existingPending.id} (midtrans=${midtransStatus ?? 'unknown'}) for ${userIdToUse ? `user ${userIdToUse}` : `guest ${guestId}`}.`,
+            );
+            return {
+              paymentLink: existingPending.paymentUrl || existingPending.midtransInvoiceUrl || null,
+              invoice: existingPending,
+              message: 'Existing pending invoice reused.',
+            };
+          } else {
+            this.logger.warn(
+              `⏭️ Skipping reuse of PENDING invoice ID=${existingPending.id} (status=${midtransStatus ?? 'n/a'}, age=${ageMinutes.toFixed(1)}m). Will create a new one.`,
+            );
+            // Mark local invoice expired if Midtrans says expired/terminal
+            try {
+              if (midtransStatus && ['expire', 'expired', 'cancel', 'deny'].includes(midtransStatus)) {
+                await prisma.invoice.update({ where: { id: existingPending.id }, data: { status: 'EXPIRED' } });
+              }
+            } catch (e) {
+              this.logger.warn('Failed to update old invoice status while skipping reuse.', { id: existingPending.id });
+            }
+            // Fall through to create new Midtrans transaction
+          }
         }
 
         // 3. Prepare Midtrans Payload (Keep existing logic, ensure customer details use payload/shippingAddress)
