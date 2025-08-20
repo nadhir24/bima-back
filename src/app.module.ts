@@ -58,6 +58,9 @@ export class AppModule {
         { path: 'users/:id', method: RequestMethod.GET },
         { path: 'users/delete/:id', method: RequestMethod.DELETE },
         { path: 'users/:userId/addresses', method: RequestMethod.GET },
+        // Public payment endpoints (guest access)
+        { path: 'payment/invoice/guest-list', method: RequestMethod.GET },
+        { path: 'payment/snap/order-detail', method: RequestMethod.GET },
         //         { path: 'payment/invoice/notifications', method: RequestMethod.GET },
         //         { path: 'payment/invoice/guest/:invoiceId', method: RequestMethod.GET },
         //         { path: 'payment/invoice/user/:invoiceId', method: RequestMethod.GET },
