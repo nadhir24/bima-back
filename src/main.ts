@@ -222,11 +222,22 @@ async function bootstrap() {
   });
 
   app.enableCors({
-    origin: true, // Allow all origins for image requests
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    origin: (origin, callback) => callback(null, true),
+    methods: ['GET', 'HEAD', 'PUT', 'PATCH', 'POST', 'DELETE', 'OPTIONS'],
     credentials: true,
     exposedHeaders: ['Content-Disposition', 'Content-Type'],
-    allowedHeaders: ['Authorization', 'Content-Type', 'Accept'],
+    // Allow common custom/request headers used by frontend and proxies
+    allowedHeaders: [
+      'Authorization',
+      'Content-Type',
+      'Accept',
+      'Origin',
+      'Referer',
+      'User-Agent',
+      'X-Requested-With',
+      'Cache-Control',
+      'Pragma',
+    ],
     maxAge: 86400, // 24 hours
   });
   
