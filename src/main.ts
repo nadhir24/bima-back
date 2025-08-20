@@ -115,7 +115,7 @@ async function bootstrap() {
     origin: (origin, callback) => callback(null, true),
     credentials: true,
     methods: 'GET,HEAD,PUT,PATCH,POST,DELETE,OPTIONS',
-    allowedHeaders: 'Content-Type, Authorization, Cache-Control, X-Requested-With, Accept, Origin, Referer, User-Agent',
+    allowedHeaders: 'Content-Type, Authorization, Cache-Control, Pragma, X-Requested-With, Accept, Origin, Referer, User-Agent',
   });
 
   // Compute cookie settings
